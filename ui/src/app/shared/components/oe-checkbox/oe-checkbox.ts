@@ -1,7 +1,7 @@
-import { CommonModule } from "@angular/common";
-import { Component, Input } from "@angular/core";
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from "@angular/core";
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from "@angular/forms";
-import { IonCheckbox, IonicModule } from "@ionic/angular";
+import { IonCheckbox } from "@ionic/angular";
+import { CommonUiModule } from "../../common-ui.module";
 /**
  * Checkbox component for labels with embedded links
  *
@@ -11,15 +11,21 @@ import { IonCheckbox, IonicModule } from "@ionic/angular";
     selector: "oe-checkbox",
     templateUrl: "./oe-checkbox.html",
     standalone: true,
-    imports: [
-        CommonModule,
-        IonicModule,
-        FormsModule,
-        ReactiveFormsModule,
-    ],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [FormsModule, ReactiveFormsModule, CommonUiModule],
 })
 export class OeCheckboxComponent {
+    @Input({ required: true }) public attributes: Partial<
+        Pick<IonCheckbox, "labelPlacement"> & Pick<HTMLElement, "slot"> & { text: string }
+    > | null = null;
+    @Input({ required: true }) public form: { formGroup: FormGroup; controlName: FormControl } | null = null;
+    @Output() public setFormGroup: EventEmitter<FormGroup> = new EventEmitter();
 
-    @Input({ required: true }) public attributes: Partial<Pick<IonCheckbox, "labelPlacement"> & Pick<HTMLElement, "slot"> & { text: string }> | null = null;
-    @Input({ required: true }) public form: { formGroup: FormGroup, controlName: FormControl } | null = null;
+    protected onChange() {
+        if (this?.form == null) {
+            return;
+        }
+
+        this.setFormGroup.emit(this.form.formGroup);
+    }
 }

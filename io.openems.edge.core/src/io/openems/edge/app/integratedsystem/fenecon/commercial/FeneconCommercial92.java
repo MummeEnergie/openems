@@ -1,11 +1,18 @@
 package io.openems.edge.app.integratedsystem.fenecon.commercial;
 
 import static io.openems.edge.app.common.props.CommonProps.alias;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.batteryAndIo;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.deinstallableSelfConsumptionOptimization;
 import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.essLimiter14aToHardware;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.isHardwareInstalledForMasterBox;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.modbusInternal;
 import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.externalLimitationType;
+import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.feedInLink;
+import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.gridCode;
 import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.hasEssLimiter14a;
 import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.maxFeedInPower;
 import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.safetyCountry;
+import static io.openems.edge.app.integratedsystem.fenecon.commercial.FeneconCommercialUtils.isOldGridMeterAppUsedByCommercialApp;
 
 import java.util.Map;
 import java.util.function.Function;
@@ -21,10 +28,10 @@ import com.google.gson.JsonElement;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.function.ThrowingTriFunction;
-import io.openems.common.oem.OpenemsEdgeOem;
 import io.openems.common.session.Language;
 import io.openems.common.session.Role;
 import io.openems.edge.app.enums.ExternalLimitationType;
+import io.openems.edge.app.enums.GridCode;
 import io.openems.edge.app.integratedsystem.FeneconHomeComponents;
 import io.openems.edge.app.integratedsystem.fenecon.commercial.FeneconCommercial92.Property;
 import io.openems.edge.common.component.ComponentManager;
@@ -32,7 +39,6 @@ import io.openems.edge.core.appmanager.AbstractOpenemsApp;
 import io.openems.edge.core.appmanager.AbstractOpenemsAppWithProps;
 import io.openems.edge.core.appmanager.AppConfiguration;
 import io.openems.edge.core.appmanager.AppDef;
-import io.openems.edge.core.appmanager.AppDescriptor;
 import io.openems.edge.core.appmanager.AppManagerUtil;
 import io.openems.edge.core.appmanager.AppManagerUtilSupplier;
 import io.openems.edge.core.appmanager.ComponentUtil;
@@ -46,6 +52,7 @@ import io.openems.edge.core.appmanager.Type;
 import io.openems.edge.core.appmanager.Type.Parameter;
 import io.openems.edge.core.appmanager.Type.Parameter.BundleParameter;
 import io.openems.edge.core.appmanager.dependency.Tasks;
+import io.openems.edge.core.appmanager.dependency.aggregatetask.ComponentDef;
 
 @Component(name = "App.FENECON.Commercial.92")
 public class FeneconCommercial92
@@ -55,10 +62,17 @@ public class FeneconCommercial92
 	public enum Property implements Type<Property, FeneconCommercial92, Parameter.BundleParameter> {
 		ALIAS(alias()), //
 
-		SAFETY_COUNTRY(AppDef.copyOfGeneric(safetyCountry(), def -> def //
+		SAFETY_COUNTRY(AppDef.copyOfGeneric(safetyCountry(), def -> def//
 				.setRequired(true))), //
 
-		FEED_IN_TYPE(externalLimitationType(ExternalLimitationType.EXTERNAL_LIMITATION)), //
+		GRID_CODE(AppDef.copyOfGeneric(gridCode(), def -> def//
+				.setDefaultValue(GridCode.VDE_4105))), //
+
+		LINK_FEED_IN(feedInLink()), //
+		// hidden until external limitation is implemented
+		FEED_IN_TYPE(externalLimitationType(ExternalLimitationType.EXTERNAL_LIMITATION,
+				ExternalLimitationType.DYNAMIC_EXTERNAL_LIMITATION)//
+				.appendIsAllowedToSee(AppDef.FieldValuesBiPredicate.FALSE)), //
 		MAX_FEED_IN_POWER(maxFeedInPower(FEED_IN_TYPE)), //
 
 		HAS_ESS_LIMITER_14A(hasEssLimiter14a()), //
@@ -104,13 +118,6 @@ public class FeneconCommercial92
 	}
 
 	@Override
-	public AppDescriptor getAppDescriptor(OpenemsEdgeOem oem) {
-		return AppDescriptor.create() //
-				.setWebsiteUrl(oem.getAppWebsiteUrl(this.getAppId())) //
-				.build();
-	}
-
-	@Override
 	public OpenemsAppCategory[] getCategories() {
 		return new OpenemsAppCategory[] { OpenemsAppCategory.INTEGRATED_SYSTEM };
 	}
@@ -139,7 +146,6 @@ public class FeneconCommercial92
 			final var gridMeterId = "meter0";
 			final var essId = "ess0";
 
-			final var feedInType = this.getEnum(p, ExternalLimitationType.class, Property.FEED_IN_TYPE);
 			final var hasEssLimiter14a = this.getBoolean(p, Property.HAS_ESS_LIMITER_14A);
 
 			final var batteryTarget = this.getString(p, Property.BATTERY_TARGET);
@@ -147,31 +153,56 @@ public class FeneconCommercial92
 			final var deviceHardware = this.appManagerUtil
 					.getFirstInstantiatedAppByCategories(OpenemsAppCategory.OPENEMS_DEVICE_HARDWARE);
 
+			final var gridCode = this.getEnum(p, GridCode.class, Property.GRID_CODE).name();
+			final var dcMinVoltage = GridCode.VDE_4110.name().equals(gridCode) ? 653 : 650;
+			final var essProtection = GridCode.VDE_4110.name().equals(gridCode) //
+					? "RAMP"
+					: "VOLTAGE_REGULATION";
+
 			final var components = Lists.newArrayList(//
-					FeneconHomeComponents.battery(bundle, batteryId, modbusToBatteryId, batteryTarget), //
-					FeneconCommercialComponents.batteryInverter(bundle, batteryInverterId, modbusToBatteryInverterId), //
-					FeneconHomeComponents.ess(bundle, essId, batteryId, batteryInverterId), //
-					FeneconHomeComponents.io(bundle, modbusToBatteryId), //
-					FeneconHomeComponents.modbusInternal(bundle, t, modbusToBatteryId), //
-					FeneconHomeComponents.predictor(bundle, t), //
-					FeneconCommercialComponents.modbusToBatteryInverter(bundle, t, modbusToBatteryInverterId), //
-					FeneconCommercialComponents.modbusToGridMeter(bundle, t, modbusToGridMeterId), //
-					FeneconHomeComponents.modbusForExternalMeters(bundle, t, modbusToExternalDevicesId, deviceHardware) //
+					FeneconCommercialComponents.batteryInverterWithForceErrorBehaviour(bundle, batteryInverterId,
+							modbusToBatteryInverterId, dcMinVoltage, gridCode), //
+					FeneconCommercialComponents.essWithForceEssFaultBehaviour(bundle, essId, batteryId,
+							batteryInverterId, essProtection), //
+					ComponentDef.from(
+							FeneconCommercialComponents.modbusToBatteryInverter(bundle, t, modbusToBatteryInverterId)), //
+					ComponentDef.from(FeneconHomeComponents.modbusForExternalMeters(bundle, t,
+							modbusToExternalDevicesId, deviceHardware)) //
+			);
+
+			if (!isHardwareInstalledForMasterBox(deviceHardware)) {
+				components.add(ComponentDef.from(modbusInternal(bundle, t, modbusToBatteryId)));
+			}
+
+			components.addAll(//
+					batteryAndIo(bundle, deviceHardware, batteryId, modbusToBatteryId, batteryTarget).stream() //
+							.map(ComponentDef::from) //
+							.toList() //
 			);
 
 			final var dependencies = Lists.newArrayList(//
-					FeneconHomeComponents.selfConsumptionOptimization(t, essId, gridMeterId), //
+					deinstallableSelfConsumptionOptimization(t, essId, gridMeterId), //
 					FeneconHomeComponents.gridOptimizedCharge(t), //
 					FeneconHomeComponents.prepareBatteryExtension(), //
-					FeneconCommercialComponents.gridMeter(bundle, gridMeterId, modbusToGridMeterId) //
+					FeneconHomeComponents.predictionDefault(), //
+					FeneconHomeComponents.predictionUnmanagedConsumption()//
 			);
+
+			if (isOldGridMeterAppUsedByCommercialApp(this.appManagerUtil, this.getAppId())) {
+				dependencies.add(//
+						FeneconCommercialComponents.gridMeterWithOldDependency(bundle, gridMeterId,
+								modbusToGridMeterId));
+			} else {
+				dependencies.add(//
+						FeneconCommercialComponents.gridMeter(bundle));
+			}
 
 			if (hasEssLimiter14a) {
 				dependencies.add(essLimiter14aToHardware(this.appManagerUtil, deviceHardware));
 			}
 
 			return AppConfiguration.create() //
-					.addTask(Tasks.component(components)) //
+					.addTask(Tasks.componentFromComponentConfig(components)) //
 					.addTask(Tasks.staticIp(new InterfaceConfiguration("eth1") //
 							.addIp("BatteryInverter", "172.16.0.99/24")))
 					.addDependencies(dependencies) //

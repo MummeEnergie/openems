@@ -1,11 +1,19 @@
 package io.openems.edge.evse.chargepoint.keba.common;
 
+import static io.openems.common.utils.ReflectionUtils.getValueViaReflection;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.test.DummyConfigurationAdmin;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
+import io.openems.edge.bridge.modbus.api.ModbusProtocol;
+import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
+import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.bridge.modbus.test.DummyModbusBridge;
+import io.openems.edge.common.channel.WriteChannel;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
-import io.openems.edge.common.test.DummyConfigurationAdmin;
 
 public class KebaModbusTest {
 
@@ -50,16 +58,18 @@ public class KebaModbusTest {
 								new int[] { 0x0000, 0x00E7 }) //
 						.withRegisters(1046, // POWER_FACTOR: 905
 								new int[] { 0x0000, 0x235A }) //
-						.withRegisters(1100, // MAX_CHARGING_CURRENT - TODO
-								new int[] { 0x0000, 0x0000 }) //
+						.withRegisters(1100, // MAX_CHARGING_CURRENT
+								new int[] { 0x0000, 0x19A7 }) //
+						.withRegisters(1110, // MAX_SUPPORTED_CURRENT
+								new int[] { 0x0000, 0x7D00 }) //
 						.withRegisters(1500, // RFID - TODO
 								new int[] { 0x0000, 0x0000 }) //
 						.withRegisters(1502, // ENERGY_SESSION
 								new int[] { 0x0000, 0xFF14 }) //
-						.withRegisters(1550, // PHASE_SWITCH_SOURCE - TODO
-								new int[] { 0x0000, 0x0000 }) //
-						.withRegisters(1552, // PHASE_SWITCH_STATE - TODO
-								new int[] { 0x0000, 0x0000 }) //
+						.withRegisters(1550, // PHASE_SWITCH_SOURCE
+								new int[] { 0x0000, 0x0003 }) //
+						.withRegisters(1552, // PHASE_SWITCH_STATE
+								new int[] { 0x0000, 0x0001 }) //
 						.withRegisters(1600, // FAILSAFE_CURRENT_SETTING - TODO
 								new int[] { 0x0000, 0x0000 }) //
 						.withRegisters(1602, // FAILSAFE_TIMEOUT_SETTING - TODO
@@ -79,7 +89,6 @@ public class KebaModbusTest {
 
 				.output(KebaModbus.ChannelId.ERROR_CODE, 0) //
 				.output(KebaModbus.ChannelId.SERIAL_NUMBER, 0) //
-				.output(KebaModbus.ChannelId.MAX_CHARGING_CURRENT, 0) //
 				.output(KebaModbus.ChannelId.FAILSAFE_CURRENT_SETTING, 0) //
 				.output(KebaModbus.ChannelId.FAILSAFE_TIMEOUT_SETTING, 0) //
 				.output(KebaModbus.ChannelId.DEVICE_SOFTWARE_OUTDATED, false) //
@@ -95,5 +104,28 @@ public class KebaModbusTest {
 				.output(KebaModbus.ChannelId.PTAF_RFID, ProductTypeAndFeatures.Rfid.WITH_RFID) //
 				.output(KebaModbus.ChannelId.PTAF_BUTTON, ProductTypeAndFeatures.Button.WITH_BUTTON) //
 		;
+	}
+
+	/**
+	 * Writes SET_ENERGY_LIMIT in Wh and asserts the scaled FC6 value on register
+	 * 5010.
+	 *
+	 * @param sut              the {@link KebaModbus} implementation
+	 * @param energyLimitWh    the channel write in Wh
+	 * @param expectedRegister the expected register 5010 value
+	 * @throws Exception on error
+	 */
+	public static void testEnergyLimitWriteScale(KebaModbus sut, int energyLimitWh, int expectedRegister)
+			throws Exception {
+		((WriteChannel<?>) sut.channel(EvseKeba.ChannelId.SET_ENERGY_LIMIT)) //
+				.setNextWriteValueFromObject(energyLimitWh);
+		ModbusProtocol protocol = getValueViaReflection(sut, "protocol");
+		var task = protocol.getTaskManager().getTasks().stream() //
+				.filter(t -> t instanceof FC6WriteRegisterTask && t.getStartAddress() == 5010) //
+				.findFirst() //
+				.orElseThrow();
+		var registers = ((UnsignedWordElement) task.getElements()[0]).getNextWriteValueAndReset();
+		assertNotNull(registers);
+		assertEquals(expectedRegister, registers[0].getValue());
 	}
 }

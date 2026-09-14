@@ -3,8 +3,8 @@ package io.openems.edge.app.integratedsystem;
 import static io.openems.edge.common.test.DummyUser.DUMMY_ADMIN;
 import static io.openems.edge.core.appmanager.AssertOpenemsAppPropertyDefinition.assertPropertyDefaultValue;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import io.openems.common.jsonrpc.type.DeleteComponentConfig;
 import io.openems.common.utils.JsonUtils;
@@ -24,7 +24,7 @@ public class TestFeneconHome30DefaultRelays {
 
 	private AppManagerTestBundle appManagerTestBundle;
 
-	@Before
+	@BeforeEach
 	public void beforeEach() throws Exception {
 		this.appManagerTestBundle = new AppManagerTestBundle(null, null, t -> {
 			return Apps.of(t, //
@@ -33,16 +33,20 @@ public class TestFeneconHome30DefaultRelays {
 					Apps::selfConsumptionOptimization, //
 					Apps::socomecMeter, //
 					Apps::prepareBatteryExtension, //
+					Apps::sohCycle, //
 					Apps::heatPump, //
 					Apps::heatingElement, //
 					Apps::combinedHeatAndPower, //
 					Apps::manualRelayControl, //
-					Apps::thresholdControl //
+					Apps::thresholdControl, //
+					Apps::predictionDefault, //
+					Apps::predictionUnmanagedConsumption//
 			);
 		}, null, new PseudoComponentManagerFactory());
 
 		this.appManagerTestBundle
 				.addSchedulerByCentralOrderAggregateTask(this.appManagerTestBundle.addComponentAggregateTask());
+		this.appManagerTestBundle.addPredictorManagerByCentralOrderAggregateTask();
 
 		this.createFullHomeWithDummyIo();
 	}

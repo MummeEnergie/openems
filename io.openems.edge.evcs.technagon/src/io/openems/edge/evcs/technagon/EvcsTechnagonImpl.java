@@ -43,10 +43,10 @@ import io.openems.edge.evcs.api.ChargingType;
 import io.openems.edge.evcs.api.Evcs;
 import io.openems.edge.evcs.api.EvcsPower;
 import io.openems.edge.evcs.api.ManagedEvcs;
-import io.openems.edge.evcs.api.PhaseRotation;
 import io.openems.edge.evcs.api.Status;
 import io.openems.edge.evcs.api.WriteHandler;
 import io.openems.edge.meter.api.ElectricityMeter;
+import io.openems.edge.meter.api.PhaseRotation;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(name = "Evcs.Technagon", immediate = true, configurationPolicy = ConfigurationPolicy.REQUIRE)

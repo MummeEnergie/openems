@@ -1,17 +1,15 @@
 package io.openems.edge.controller.evse.cluster;
 
-import static io.openems.common.utils.ConfigUtils.generateReferenceTargetFilter;
-
 import io.openems.common.test.AbstractComponentConfig;
 
 @SuppressWarnings("all")
 public class MyConfig extends AbstractComponentConfig implements Config {
 
-	protected static class Builder {
+	public static class Builder {
 		private String id;
 		private DistributionStrategy distributionStrategy;
-		private boolean debugMode;
 		private String[] ctrlIds;
+		private LogVerbosity logVerbosity;
 
 		private Builder() {
 		}
@@ -26,13 +24,13 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setDebugMode(boolean debugMode) {
-			this.debugMode = debugMode;
+		public Builder setCtrlIds(String... ctrlIds) {
+			this.ctrlIds = ctrlIds;
 			return this;
 		}
 
-		public Builder setCtrlIds(String... ctrlIds) {
-			this.ctrlIds = ctrlIds;
+		public Builder setLogVerbosity(LogVerbosity logVerbosity) {
+			this.logVerbosity = logVerbosity;
 			return this;
 		}
 
@@ -63,17 +61,12 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public boolean debugMode() {
-		return this.builder.debugMode;
-	}
-
-	@Override
 	public String[] ctrl_ids() {
 		return this.builder.ctrlIds;
 	}
 
 	@Override
-	public String ctrls_target() {
-		return generateReferenceTargetFilter(this.id(), this.ctrl_ids());
+	public LogVerbosity logVerbosity() {
+		return this.builder.logVerbosity;
 	}
 }

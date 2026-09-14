@@ -34,7 +34,6 @@ import io.openems.common.types.OptionsEnum;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.evse.api.chargepoint.EvseChargePoint;
-import io.openems.edge.evse.api.chargepoint.PhaseRotation;
 import io.openems.edge.evse.api.chargepoint.Profile.ChargePointAbilities;
 import io.openems.edge.evse.api.chargepoint.Profile.ChargePointActions;
 import io.openems.edge.evse.chargepoint.keba.common.CommonConfig;
@@ -44,10 +43,10 @@ import io.openems.edge.evse.chargepoint.keba.common.Keba;
 import io.openems.edge.evse.chargepoint.keba.common.KebaUdp;
 import io.openems.edge.evse.chargepoint.keba.common.KebaUtils;
 import io.openems.edge.evse.chargepoint.keba.common.enums.PhaseSwitchSource;
-import io.openems.edge.evse.chargepoint.keba.common.enums.PhaseSwitchState;
-import io.openems.edge.evse.chargepoint.keba.common.enums.SetEnable;
+import io.openems.edge.evse.chargepoint.keba.common.enums.TriggerPhaseSwitch;
 import io.openems.edge.evse.chargepoint.keba.udp.core.EvseChargePointKebaUdpCore;
 import io.openems.edge.meter.api.ElectricityMeter;
+import io.openems.edge.meter.api.PhaseRotation;
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
 
@@ -156,52 +155,42 @@ public class EvseKebaUdpImpl extends AbstractOpenemsComponent implements KebaUdp
 			if (this.config.readOnly()) {
 				return;
 			}
-			this.setCurrent(//
-					this.getSetEnableChannel().getNextWriteValueAndReset() //
-							.map(ena -> OptionsEnum.getOption(SetEnable.class, ena)) //
-							.orElse(SetEnable.UNDEFINED), //
-					this.getSetChargingCurrentChannel().getNextWriteValueAndReset().orElse(null));
+			this.setCurrent(this.getSetChargingCurrentChannel().getNextWriteValueAndReset().orElse(null));
 			this.setPhaseSwitch(//
 					this.getSetPhaseSwitchSourceChannel().getNextWriteValueAndReset() //
 							.map(pss -> OptionsEnum.getOption(PhaseSwitchSource.class, pss)) //
 							.orElse(PhaseSwitchSource.UNDEFINED), //
-					this.getSetPhaseSwitchStateChannel().getNextWriteValueAndReset() //
-							.map(pss -> OptionsEnum.getOption(PhaseSwitchState.class, pss)) //
-							.orElse(PhaseSwitchState.UNDEFINED)); //
+					this.getSetTriggerPhaseSwitchChannel().getNextWriteValueAndReset() //
+							.map(pss -> OptionsEnum.getOption(TriggerPhaseSwitch.class, pss)) //
+							.orElse(TriggerPhaseSwitch.UNDEFINED)); //
 			this.setDisplayText(Optional.empty()); // TODO
 		}
 		}
 	}
 
-	private void setCurrent(SetEnable setEnable, Integer setChargingCurrent) {
-		final var current = switch (setEnable) {
-		case DISABLE -> 0;
-		case ENABLE -> setChargingCurrent;
-		case UNDEFINED -> null;
-		};
-
-		if (current == null) {
+	private void setCurrent(Integer setChargingCurrent) {
+		if (setChargingCurrent == null) {
 			return;
 		}
 
-		this.send("currtime " + current + " 1");
+		this.send("currtime " + setChargingCurrent + " 1");
 	}
 
 	private void setDisplayText(Optional<String> setText) {
 		setText.ifPresent(text -> this.send(KebaUdp.preprocessDisplayTest(text)));
 	}
 
-	private void setPhaseSwitch(PhaseSwitchSource phaseSwitchSource, PhaseSwitchState phaseSwitchState) {
+	private void setPhaseSwitch(PhaseSwitchSource phaseSwitchSource, TriggerPhaseSwitch triggerPhaseSwitch) {
 		switch (phaseSwitchSource) {
 		case NONE, UNDEFINED -> doNothing();
 		case VIA_MODBUS, VIA_OCPP, VIA_REST, VIA_UDP //
 			-> this.send("x2src " + phaseSwitchSource.getValue());
 		}
 
-		switch (phaseSwitchState) {
+		switch (triggerPhaseSwitch) {
 		case UNDEFINED -> doNothing();
 		case SINGLE, THREE //
-			-> this.send("x2 " + phaseSwitchState.getValue());
+			-> this.send("x2 " + triggerPhaseSwitch.getValue());
 		}
 	}
 

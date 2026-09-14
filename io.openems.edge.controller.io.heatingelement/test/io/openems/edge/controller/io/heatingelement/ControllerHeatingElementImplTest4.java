@@ -13,7 +13,6 @@ import io.openems.common.test.TimeLeapClock;
 import io.openems.edge.common.sum.DummySum;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.DummyComponentManager;
-import io.openems.edge.common.test.DummyConfigurationAdmin;
 import io.openems.edge.controller.io.heatingelement.enums.Level;
 import io.openems.edge.controller.io.heatingelement.enums.Mode;
 import io.openems.edge.controller.io.heatingelement.enums.WorkMode;
@@ -28,7 +27,6 @@ public class ControllerHeatingElementImplTest4 {
 		return new ControllerTest(new ControllerIoHeatingElementImpl()) //
 				.addReference("componentManager", new DummyComponentManager(CLOCK)) //
 				.addReference("sum", new DummySum()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addComponent(new DummyInputOutput("io0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //

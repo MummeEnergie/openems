@@ -4,6 +4,8 @@ import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.AttributeType;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
+import io.openems.common.types.DebugMode;
+
 @ObjectClassDefinition(//
 		name = "Controller Clever-PV", //
 		description = "This controller connects to Clever-PV")
@@ -18,11 +20,17 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "Is enabled?", description = "Is this Component enabled?")
 	boolean enabled() default true;
 
-	@AttributeDefinition(name = "URL", description = "Full API URL. See https://www.clever-pv.com/anleitungen/push-api", type = AttributeType.PASSWORD)
+	@AttributeDefinition(name = "URL", description = "Full API URL. See https://support.clever-pv.com/hc/de/articles/34324327185170-Push-API", type = AttributeType.PASSWORD)
 	String url();
 
-	@AttributeDefinition(name = "Log-Verbosity", description = "The log verbosity.")
-	LogVerbosity logVerbosity() default LogVerbosity.NONE;
+	@AttributeDefinition(name = "Read only", description = "Defines that this controller is read only. This permanently disables remote control via Clever-PV.", required = true)
+	boolean readOnly() default true;
+
+	@AttributeDefinition(name = "Control Mode", description = "Set the type of control mode.")
+	ControlMode controlMode() default ControlMode.OFF;
+
+	@AttributeDefinition(name = "Debug Mode", description = "Activates the debug mode")
+	DebugMode debugMode() default DebugMode.OFF;
 
 	String webconsole_configurationFactory_nameHint() default "Controller Clever-PV [{id}]";
 }

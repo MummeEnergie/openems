@@ -31,7 +31,7 @@ __if not already installed, follow <<Setup docker>>__
 
 === Setup docker
 
-To setup docker follow the instuctions from https://docs.docker.com/engine/install/[docs.docker.com].
+To setup docker follow the instructions from https://docs.docker.com/engine/install/[docs.docker.com].
 
 == Start Container 
 
@@ -115,7 +115,8 @@ services:
       - openems-ui-conf:/etc/nginx:rw
       - openems-ui-log:/var/log/nginx:rw
     environment:
-      - UI_WEBSOCKET=ws://<hostname>:8082
+      - WEBSOCKET_HOST=openems_backend
+      - WEBSOCKET_PORT=8082
     ports:
       - 80:80
       - 443:443
@@ -132,8 +133,6 @@ summary of the changes:
 1. Open a Port for UI Websocket (8082) on the `openems-backend` service
 2. Added a new service `openems-ui` to the docker-compose file
 3. Added the volumes `openems-ui-conf` and `openems-ui-log`
-
-NOTE: The `UI_WEBSOCKET` environment variable must be set to the hostname of the OpenEMS Backend container. This URL is used by the UI to connect to the OpenEMS Backend Websocket. Make sure it is reachable from any device you want to use the UI on.
 
 === Update docker-compose
 
@@ -158,19 +157,19 @@ to add InfluxDB to your setup, you can do so by adjusting your `docker-compose.y
 [source,yaml]
 ----
   …
-  openems_influxdb:
-    image: influxdb:alpine
-    container_name: openems_influxdb
-    hostname: openems_influxdb
+  openems-influxdb:
+    image: influxdb:2.9-alpine
+    container_name: openems-influxdb
+    hostname: openems-influxdb
     restart: unless-stopped
     volumes:
-      - openems-influxdb:/var/lib/influxdb2:rw
+      - openems-influxdb2-data:/var/lib/influxdb2:rw
     ports:
       - 8086:8086
 
 volumes:
   …
-  openems-influxdb:
+  openems-influxdb2-data:
 ----
 
 === Setup InfluxDB
@@ -202,7 +201,7 @@ NOTE: Note down Token
 [%noheader,cols="1,1",width="50%"]
 |===
 | Query Language | INFLUX_QL
-| URL | http://openems_influxdb:8086
+| URL | http://openems-influxdb:8086
 | Org | openems.io
 | ApiKey | InfluxDB-Token
 | Bucket | openems

@@ -13,7 +13,10 @@
 /bower_components
 
 # IntelliJ IDEA files and metadata
-/.idea
+/.idea/*
+!/.idea/runConfigurations
+!/.idea/eclipseCodeFormatter.xml
+!/.idea/checkstyle-idea.xml
 *.iml
 *.eml
 
@@ -33,7 +36,10 @@ testem.log
 #System Files
 .DS_Store
 .gradle/
-generated/
+/generated/
+
+# nvm
+.nvmrc
 
 ### Eclipse ###
 
@@ -199,6 +205,9 @@ typings/
 ### Gradle ###
 .gradle
 /build/
+/gradle/build-logic/build/
+/gradle/build-logic/.gradle/
+/gradle/build-logic/.kotlin/
 
 # Ignore Gradle GUI config
 gradle-app.setting
@@ -228,11 +237,17 @@ gradle-app.setting
 io.openems.edge.controller.api.mqtt/edge0
 io.openems.edge.application/c:/
 
+/io.openems.*/bin/
+/io.openems.*/bin_test/
+/io.openems.*/generated/
+
 ### Debian ###
 !tools/debian/**
+
+### Docker - for Dev UI under WSL ###
+docker-compose.override.yml
 
 ### Mumme-IT local dev ###
 /edge-data-dir/
 /config_*
-.DS_Store
 .settings/

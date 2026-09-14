@@ -9,15 +9,17 @@ import static io.openems.edge.ess.api.SymmetricEss.ChannelId.ACTIVE_POWER;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.GRID_MODE;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.REACTIVE_POWER;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.SOC;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.junit.Test;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 import io.openems.edge.common.startstop.StartStop;
 import io.openems.edge.common.startstop.StartStopConfig;
 import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
-import io.openems.edge.common.test.DummyConfigurationAdmin;
 import io.openems.edge.ess.test.DummyManagedAsymmetricEss;
 import io.openems.edge.ess.test.DummyManagedSymmetricEss;
 import io.openems.edge.ess.test.DummyPower;
@@ -26,9 +28,9 @@ public class EssClusterImplTest {
 
 	@Test
 	public void testCluster() throws Exception {
-		new ComponentTest(new EssClusterImpl()) //
+		final var ess = new EssClusterImpl();
+		new ComponentTest(ess) //
 				.addReference("power", new DummyPower()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("addEss", new DummyManagedSymmetricEss("ess1")) //
 				.addReference("addEss", new DummyManagedAsymmetricEss("ess2")) //
 				.activate(MyConfig.create() //
@@ -58,13 +60,15 @@ public class EssClusterImplTest {
 						.input("ess2", ALLOWED_DISCHARGE_POWER, 20) //
 						.output(ALLOWED_DISCHARGE_POWER, 30) //
 				);
+
+		assertEquals(1, ess.getPowerPrecision());
+		ess.getPowerPrecision();
 	}
 
 	@Test
 	public void testGridMode() throws Exception {
 		new ComponentTest(new EssClusterImpl()) //
 				.addReference("power", new DummyPower()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("addEss", new DummyManagedSymmetricEss("ess1")) //
 				.addReference("addEss", new DummyManagedSymmetricEss("ess2")) //
 				.addReference("addEss", new DummyManagedSymmetricEss("ess3")) //
@@ -98,7 +102,6 @@ public class EssClusterImplTest {
 	public void testSoc() throws Exception {
 		new ComponentTest(new EssClusterImpl()) //
 				.addReference("power", new DummyPower()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("addEss", new DummyManagedSymmetricEss("ess1").withCapacity(50000)) //
 				.addReference("addEss", new DummyManagedSymmetricEss("ess2").withCapacity(3000)) //
 				.activate(MyConfig.create() //
@@ -126,7 +129,6 @@ public class EssClusterImplTest {
 	public void testStartStop() throws Exception {
 		new ComponentTest(new EssClusterImpl()) //
 				.addReference("power", new DummyPower()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("addEss", new DummyManagedSymmetricEss("ess1")) //
 				.addReference("addEss", new DummyManagedSymmetricEss("ess2")) //
 				.activate(MyConfig.create() //
@@ -152,5 +154,22 @@ public class EssClusterImplTest {
 						.output(START_STOP, StartStop.START)) //
 
 		;
+	}
+
+	@Test
+	public void testCalculateMinPowerPrecision() {
+		assertEquals(1, EssClusterImpl.calculateMinPowerPrecision(List.of(//
+				new DummyManagedSymmetricEss("ess0") //
+						.withPowerPrecision(0), //
+				new DummyManagedSymmetricEss("ess1") //
+						.withPowerPrecision(100) //
+		)));
+		assertEquals(50, EssClusterImpl.calculateMinPowerPrecision(List.of(//
+				new DummyManagedSymmetricEss("ess0") //
+						.withPowerPrecision(50), //
+				new DummyManagedSymmetricEss("ess1") //
+						.withPowerPrecision(100) //
+		)));
+		assertEquals(1, EssClusterImpl.calculateMinPowerPrecision(List.of()));
 	}
 }

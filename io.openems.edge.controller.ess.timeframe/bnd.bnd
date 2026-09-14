@@ -11,6 +11,6 @@ Bundle-Version: 0.1.0
 	io.openems.edge.ess.api,\
 	io.openems.edge.timedata.api,\
 	io.openems.edge.meter.api
-	
+
 -testpath: \
 	${testpath}

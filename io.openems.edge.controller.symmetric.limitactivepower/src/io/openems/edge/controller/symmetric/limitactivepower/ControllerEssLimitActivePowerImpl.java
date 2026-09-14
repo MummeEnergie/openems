@@ -1,7 +1,7 @@
 package io.openems.edge.controller.symmetric.limitactivepower;
 
+import static io.openems.common.utils.IntUtils.fitWithin;
 import static io.openems.edge.common.type.Phase.SingleOrAllPhase.ALL;
-import static io.openems.edge.common.type.TypeUtils.fitWithin;
 import static io.openems.edge.ess.power.api.Pwr.ACTIVE;
 import static io.openems.edge.ess.power.api.Relationship.GREATER_OR_EQUALS;
 import static io.openems.edge.ess.power.api.Relationship.LESS_OR_EQUALS;
@@ -103,8 +103,8 @@ public class ControllerEssLimitActivePowerImpl extends AbstractOpenemsComponent
             // adjust value so that it fits into Min/MaxActivePower
             var maxPower = ess.getPower().getMaxPower(ess, ALL, ACTIVE);
             var minPower = ess.getPower().getMinPower(ess, ALL, ACTIVE);
-            var calculatedMaxDischargePower = fitIntoMinMax(minPower, maxPower, this.maxDischargePower);
-            var calculatedMaxChargePower = fitIntoMinMax(minPower, maxPower, this.maxChargePower);
+            var calculatedMaxDischargePower = fitWithin(minPower, maxPower, this.maxDischargePower);
+            var calculatedMaxChargePower = fitWithin(minPower, maxPower, this.maxChargePower);
             // set result
             ess.addPowerConstraintAndValidate("SymmetricLimitActivePower", ALL, ACTIVE,
                     GREATER_OR_EQUALS, calculatedMaxChargePower);
@@ -127,16 +127,5 @@ public class ControllerEssLimitActivePowerImpl extends AbstractOpenemsComponent
         OffsetDateTime offsetDateTime = OffsetDateTime.parse(iso8601String, timeFormatter);
 
         return Date.from(Instant.from(offsetDateTime));
-    }
-
-
-    private static int fitIntoMinMax(int min, int max, int value) {
-        if (value > max) {
-            value = max;
-        }
-        if (value < min) {
-            value = min;
-        }
-        return value;
     }
 }

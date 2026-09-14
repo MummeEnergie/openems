@@ -9,6 +9,12 @@ import {ChannelAddress, CurrentData, Utils} from "src/app/shared/shared";
   standalone: false,
 })
 export class ModalComponent extends AbstractModal {
+  public propertyMode: string;
+
+  public readonly CONVERT_MANUAL_ON_OFF = Utils.CONVERT_MANUAL_ON_OFF(this.translate);
+  public readonly CONVERT_WATT_TO_KILOWATT = Utils.CONVERT_WATT_TO_KILOWATT;
+  public readonly CONVERT_DATE = Utils.CONVERT_DATE;
+
   protected override getChannelAddresses(): ChannelAddress[] {
     return [
       new ChannelAddress(this.component.id, "_PropertyMode"),
@@ -18,12 +24,6 @@ export class ModalComponent extends AbstractModal {
       new ChannelAddress(this.component.id, "_PropertyMaxDischargePower"),
     ];
   }
-
-  public propertyMode: string;
-
-  public readonly CONVERT_MANUAL_ON_OFF = Utils.CONVERT_MANUAL_ON_OFF(this.translate);
-  public readonly CONVERT_WATT_TO_KILOWATT = Utils.CONVERT_WATT_TO_KILOWATT;
-  public readonly CONVERT_DATE = Utils.CONVERT_DATE;
 
   protected override onCurrentData(currentData: CurrentData) {
     this.propertyMode = currentData.allComponents[this.component.id + "/_PropertyMode"];

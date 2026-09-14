@@ -4,20 +4,21 @@ import static io.openems.edge.common.test.DummyUser.DUMMY_ADMIN;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class GetAppAssistantTest {
 
 	private AppManagerTestBundle testBundle;
 
-	@Before
+	@BeforeEach
 	public void before() throws Exception {
 		this.testBundle = new AppManagerTestBundle(null, null, t -> {
 			return Apps.of(t, //
 					Apps::feneconHome10, //
 					Apps::awattarHourly, //
 					Apps::entsoE, //
+					Apps::ews, //
 					Apps::stromdaoCorrently, //
 					Apps::tibber, //
 					Apps::modbusTcpApiReadOnly, //

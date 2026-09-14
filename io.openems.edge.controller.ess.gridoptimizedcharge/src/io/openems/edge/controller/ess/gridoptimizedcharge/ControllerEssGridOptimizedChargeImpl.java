@@ -1,5 +1,13 @@
 package io.openems.edge.controller.ess.gridoptimizedcharge;
 
+import static io.openems.common.utils.IntUtils.minInt;
+import static io.openems.edge.common.channel.ChannelUtils.setValue;
+import static io.openems.edge.controller.ess.gridoptimizedcharge.ControllerEssGridOptimizedCharge.ChannelId.RUN_ENABLED;
+import static io.openems.edge.controller.ess.gridoptimizedcharge.DelayCharge.parseTime;
+import static org.osgi.service.component.annotations.ReferenceCardinality.MANDATORY;
+import static org.osgi.service.component.annotations.ReferencePolicy.STATIC;
+import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
+
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
@@ -37,8 +46,7 @@ import io.openems.edge.common.meta.GridFeedInLimitationType;
 import io.openems.edge.common.meta.Meta;
 import io.openems.edge.common.sum.Sum;
 import io.openems.edge.controller.api.Controller;
-import io.openems.edge.energy.api.EnergySchedulable;
-import io.openems.edge.energy.api.handler.EnergyScheduleHandler;
+import io.openems.edge.controller.ess.ripplecontrolreceiver.ControllerEssRippleControlReceiver;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.meter.api.ElectricityMeter;
 import io.openems.edge.predictor.api.manager.PredictorManager;
@@ -52,15 +60,22 @@ import io.openems.edge.timedata.api.utils.CalculateActiveTime;
 		immediate = true, //
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
-public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsComponent
-		implements ControllerEssGridOptimizedCharge, EnergySchedulable, Controller, OpenemsComponent, TimedataProvider,
-		ComponentManagerProvider {
+@GenerateTargetsFromReferences({ "ess", "meter" })
+public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsComponent implements
+		ControllerEssGridOptimizedCharge, Controller, OpenemsComponent, TimedataProvider, ComponentManagerProvider {
 
 	/**
 	 * Buffer in watt taken into account in the calculation of the first and last
 	 * time when production is lower or higher than consumption.
 	 */
 	protected static final int DEFAULT_POWER_BUFFER = 100;
+
+	/**
+	 * Minimum sell to grid limit in [W], when the sell to grid limit will be
+	 * ignored. As the limitation nearly zero, the controller has no flexibility
+	 * left to delay charging.
+	 */
+	private static final int MINIMUM_SELL_TO_GRID_LIIMT = 1000;
 
 	protected final RampFilter rampFilter = new RampFilter();
 	protected int maximumSellToGridPower = 0;
@@ -80,7 +95,7 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 			ControllerEssGridOptimizedCharge.ChannelId.NO_LIMITATION_TIME);
 
 	protected Config config = null;
-	private EnergyScheduleHandler energyScheduleHandler;
+	private boolean isRunEnabled = true;
 
 	/** Delay Charge logic. */
 	private DelayCharge delayCharge;
@@ -98,11 +113,16 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 	@Reference
 	protected PredictorManager predictorManager;
 
-	@Reference
+	@Reference(policy = STATIC, policyOption = GREEDY, cardinality = MANDATORY, //
+			target = "(&(id=${config.ess_id})(enabled=true))")
 	protected ManagedSymmetricEss ess;
 
-	@Reference
+	@Reference(policy = STATIC, policyOption = GREEDY, cardinality = MANDATORY, //
+			target = "(&(id=${config.meter_id})(enabled=true))")
 	protected ElectricityMeter meter;
+
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
+	protected volatile ControllerEssRippleControlReceiver rcr;
 
 	@Reference
 	private ConfigurationAdmin cm;
@@ -124,15 +144,6 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 	@Activate
 	private void activate(ComponentContext context, Config config) {
 		super.activate(context, config.id(), config.alias(), config.enabled());
-		this.energyScheduleHandler = EnergyScheduler.buildEnergyScheduleHandler(this, //
-				() -> this.config.enabled() //
-						? switch (this.config.mode()) {
-						case AUTOMATIC -> new EnergyScheduler.Config.Automatic();
-						case MANUAL ->
-							new EnergyScheduler.Config.Manual(DelayCharge.parseTime(this.config.manualTargetTime()));
-						case OFF -> null;
-						} //
-						: null);
 		this.updateConfig(config);
 	}
 
@@ -156,20 +167,12 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 		this.delayCharge = new DelayCharge(this);
 		this.updateMaximumSellToGridPower();
 		this.sellToGridLimit = new SellToGridLimit(this);
-
-		// update filter for 'ess'
-		if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {
-			return;
-		}
-
-		// update filter for 'meter'
-		if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "meter", config.meter_id())) {
-			return;
-		}
 	}
 
 	@Override
 	public void run() throws OpenemsNamedException {
+		setValue(this, RUN_ENABLED, this.isRunEnabled);
+
 		this.updateMaximumSellToGridPower();
 		if (!this.ess.isManaged() && this.config.mode() != Mode.OFF) {
 			this._setConfiguredEssIsNotManaged(true);
@@ -183,21 +186,15 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 		}
 		this._setNoValidProductionPredictionChannel(false);
 
+		if (!this.isRunEnabled) {
+			return;
+		}
+
 		// Updates the time channels.
 		this.calculateTime();
 
-		/*
-		 * Check that we are On-Grid (and warn on undefined Grid-Mode)
-		 */
-		var gridMode = this.ess.getGridMode();
-		if (gridMode.isUndefined()) {
-			this.logWarn(this.log, "Grid-Mode is [UNDEFINED]");
-		}
-		switch (gridMode) {
-		case ON_GRID:
-		case UNDEFINED:
-			break;
-		case OFF_GRID:
+		// Check that we are On-Grid (and warn on undefined Grid-Mode)
+		if (!this.ess.isOnGridOrUndefined(m -> this.logWarn(this.log, m))) {
 			this._setSellToGridLimitState(SellToGridLimitState.UNDEFINED);
 			this._setDelayChargeState(DelayChargeState.UNDEFINED);
 			return;
@@ -233,6 +230,14 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 				}
 			}
 			this._setStartEpochSeconds(LocalTime.now(clock), clock);
+		}
+
+		// No setpoint applied, when the sellToGridLimit is zero or nearly zero.
+		// Limitation of the charge power is anyways not possible.
+		if (this.maximumSellToGridPower <= MINIMUM_SELL_TO_GRID_LIIMT) {
+			this._setSellToGridLimitState(SellToGridLimitState.ALLOWED_FEED_IN_LIMIT_TOO_LOW);
+			this._setDelayChargeState(DelayChargeState.ALLOWED_FEED_IN_LIMIT_TOO_LOW);
+			return;
 		}
 
 		Integer sellToGridLimitMinChargePower = null;
@@ -292,7 +297,7 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 		if (sellToGridLimitIsDefined && delayChargeIsDefined) {
 			if (sellToGridLimitMinChargePower <= delayChargeMaxChargePower) {
 
-				this.ess.setActivePowerEquals(sellToGridLimitMinChargePower);
+				this.ess.setActivePowerEqualsWithFilter(sellToGridLimitMinChargePower);
 				this.sellToGridLimit.setSellToGridLimitChannelsAndLastLimit(SellToGridLimitState.ACTIVE_LIMIT_FIXED,
 						sellToGridLimitMinChargePower);
 				this.logDebug("Applying both constraints not possible - Set active power according to SellToGridLimit: "
@@ -467,16 +472,16 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 		return this.timedata;
 	}
 
-	@Override
-	public EnergyScheduleHandler getEnergyScheduleHandler() {
-		return this.energyScheduleHandler;
-	}
-
 	private void updateMaximumSellToGridPower() {
-		// TODO: add RippleControlReceiver logic in near future
-		if (this.meta.getGridFeedInLimitationType().asEnum() == GridFeedInLimitationType.DYNAMIC_LIMITATION) {
-			this.maximumSellToGridPower = this.meta.getMaximumGridFeedInLimit();
+		final var gridSellHardLimit = this.meta.getGridSellHardLimit();
+		final Integer dynamicGridFeedInLimit;
+		var maxApparentPower = this.ess.getMaxApparentPower();
+		if (this.rcr != null && this.rcr.isEnabled() && maxApparentPower.isDefined()) {
+			dynamicGridFeedInLimit = this.rcr.getDynamicGridFeedInLimit(maxApparentPower.get());
+		} else {
+			dynamicGridFeedInLimit = null;
 		}
+		this.maximumSellToGridPower = minInt(gridSellHardLimit, dynamicGridFeedInLimit);
 	}
 
 	/**
@@ -535,5 +540,30 @@ public class ControllerEssGridOptimizedChargeImpl extends AbstractOpenemsCompone
 				this.log.warn("Unable to reset maximumSellToGridPower in GridOptimizedCharge", e);
 			}
 		});
+	}
+
+	@Override
+	public void enableRun() {
+		this.isRunEnabled = true;
+	}
+
+	@Override
+	public void disableRun() {
+		this.isRunEnabled = false;
+	}
+
+	@Override
+	public Mode getMode() {
+		return this.config.mode();
+	}
+
+	@Override
+	public DelayChargeRiskLevel getRiskLevel() {
+		return this.config.delayChargeRiskLevel();
+	}
+
+	@Override
+	public LocalTime getManualTargetTime() {
+		return parseTime(this.config.manualTargetTime());
 	}
 }

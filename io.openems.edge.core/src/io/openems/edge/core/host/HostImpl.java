@@ -64,7 +64,7 @@ public class HostImpl extends AbstractOpenemsComponent implements Host, OpenemsC
 	protected final OperatingSystem operatingSystem;
 	private ServiceRegistration<Updateable> operatingSystemUpdateable;
 
-	private final DiskSpaceWorker diskSpaceWorker;
+	private final HostInformationWorker hostInformationWorker;
 	private final NetworkConfigurationWorker networkConfigurationWorker;
 	private final UsbConfigurationWorker usbConfigurationWorker;
 	private final SystemUpdateHandler systemUpdateHandler;
@@ -82,10 +82,10 @@ public class HostImpl extends AbstractOpenemsComponent implements Host, OpenemsC
 				OpenemsComponent.ChannelId.values(), //
 				Host.ChannelId.values() //
 		);
-		
+
 		// Initialize correct Operating System handler
 		this.operatingSystem = this.getCurrentOS();
-		this.diskSpaceWorker = new DiskSpaceWorker(this);
+		this.hostInformationWorker = new HostInformationWorker(this);
 		this.networkConfigurationWorker = new NetworkConfigurationWorker(this);
 		this.usbConfigurationWorker = new UsbConfigurationWorker(this);
 		this.systemUpdateHandler = new SystemUpdateHandler(this);
@@ -110,13 +110,13 @@ public class HostImpl extends AbstractOpenemsComponent implements Host, OpenemsC
 	}
 
 	@Activate
-	private void activate(ComponentContext componentContext, BundleContext bundleContext, Config config)
+	protected void activate(ComponentContext componentContext, BundleContext bundleContext, Config config)
 			throws OpenemsException {
 		super.activate(componentContext, SINGLETON_COMPONENT_ID, SINGLETON_SERVICE_PID, true);
 		this.config = config;
 
 		// Start the Workers
-		this.diskSpaceWorker.activate(this.id());
+		this.hostInformationWorker.activate(this.id());
 		this.networkConfigurationWorker.activate(this.id());
 		this.usbConfigurationWorker.activate(this.id());
 
@@ -132,12 +132,12 @@ public class HostImpl extends AbstractOpenemsComponent implements Host, OpenemsC
 	}
 
 	@Modified
-	private void modified(ComponentContext componentContext, BundleContext bundleContext, Config config) {
+	protected void modified(ComponentContext componentContext, BundleContext bundleContext, Config config) {
 		super.modified(componentContext, SINGLETON_COMPONENT_ID, SINGLETON_SERVICE_PID, true);
 		this.config = config;
 
 		// Modify the Workers
-		this.diskSpaceWorker.modified(this.id());
+		this.hostInformationWorker.modified(this.id());
 		this.networkConfigurationWorker.modified(this.id());
 		this.usbConfigurationWorker.modified(this.id());
 
@@ -150,7 +150,7 @@ public class HostImpl extends AbstractOpenemsComponent implements Host, OpenemsC
 	@Deactivate
 	protected void deactivate() {
 		// Stop the Workers
-		this.diskSpaceWorker.deactivate();
+		this.hostInformationWorker.deactivate();
 		this.networkConfigurationWorker.deactivate();
 		this.usbConfigurationWorker.deactivate();
 
@@ -331,21 +331,32 @@ public class HostImpl extends AbstractOpenemsComponent implements Host, OpenemsC
 			return s.hasNext() ? s.next().trim() : "";
 		}
 	}
-	
+
 	private OperatingSystem getCurrentOS() {
 		if (Files.exists(Paths.get("/.dockerenv"))) {
 			return new OperatingSystemDocker();
 		}
-		
+
 		final String osName = System.getProperty("os.name");
 
-        if (osName.startsWith("Windows")) {
-            return new OperatingSystemWindows();
-        } else if (osName.startsWith("Mac")) {
-            return new OperatingSystemMac();
-        }
-		
-		return new OperatingSystemDebianSystemd(this);
+		if (osName.startsWith("Windows")) {
+			return new OperatingSystemWindows();
+		} else if (osName.startsWith("Mac")) {
+			return new OperatingSystemMac();
+		}
+
+		return new OperatingSystemDebianSystemd();
+	}
+
+	/**
+	 * Deletes network interface configuration files.
+	 * 
+	 * @param user           the user performing the operation
+	 * @param interfaceNames the list of interface names to delete
+	 * @throws OpenemsNamedException on error
+	 */
+	public void deleteNetworkInterfaces(User user, List<String> interfaceNames) throws OpenemsNamedException {
+		this.operatingSystem.deleteNetworkInterfaces(user, interfaceNames);
 	}
 
 }

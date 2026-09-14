@@ -8,9 +8,7 @@ Bundle-Version: 1.0.0.${tstamp}
 	io.openems.common,\
 	io.openems.edge.common,\
 	io.openems.edge.evcs.pricing.api,\
-	io.openems.edge.bridge.http,\
+	io.openems.common.bridge.http,\
 
 -testpath: \
 	${testpath}
-
-

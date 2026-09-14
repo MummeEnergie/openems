@@ -1,17 +1,17 @@
 <ng-container *ngIf="isInitialized">
     <oe-flat-widget (click)="presentModal()" [icon]="{name:'cash-outline', color:'normal'}"
         [title]="component.alias">
-        <oe-flat-widget-line [name]="'General.currentPrice' | translate"
+        <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.CURRENT_PRICE' | translate"
             [value]="currentPrice != null ? (currentPrice | number:'1.2-4') + ' €/kWh' : '-'">
         </oe-flat-widget-line>
-        <oe-flat-widget-line [name]="'Edge.Index.Widgets.EVCS.PricingDashboard.nextPrice' | translate"
+        <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.PRICING_DASHBOARD.NEXT_PRICE' | translate"
             [value]="nextPrice != null ? (nextPrice | number:'1.2-4') + ' €/kWh' : '-'">
         </oe-flat-widget-line>
-        <oe-flat-widget-line [name]="'Edge.Index.Widgets.EVCS.PricingDashboard.nextChange' | translate"
+        <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.PRICING_DASHBOARD.NEXT_CHANGE' | translate"
             [value]="formatNextChange()">
         </oe-flat-widget-line>
         <oe-flat-widget-line *ngIf="overrideSource"
-            [name]="'Edge.Index.Widgets.EVCS.PricingDashboard.overrideActive' | translate"
+            [name]="'CUSTOM_WIDGETS.PRICING_DASHBOARD.OVERRIDE_ACTIVE' | translate"
             [value]="overrideSource">
         </oe-flat-widget-line>
     </oe-flat-widget>

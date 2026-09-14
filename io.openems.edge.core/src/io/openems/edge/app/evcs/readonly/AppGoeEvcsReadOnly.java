@@ -14,7 +14,6 @@ import com.google.gson.JsonElement;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.function.ThrowingTriFunction;
-import io.openems.common.oem.OpenemsEdgeOem;
 import io.openems.common.session.Language;
 import io.openems.common.types.EdgeConfig;
 import io.openems.common.utils.JsonUtils;
@@ -66,8 +65,8 @@ public class AppGoeEvcsReadOnly extends AbstractOpenemsAppWithProps<AppGoeEvcsRe
 		// Component-IDs
 		EVCS_ID(AppDef.componentId("evcs0")), //
 		ALIAS(CommonProps.alias()), //
-		IP(AppDef.copyOfGeneric(CommunicationProps.excludingIp()) //
-				.setDefaultValue("192.168.25.11") //
+		IP(AppDef.copyOfGeneric(CommunicationProps.excludingIp())//
+				.setDefaultValue("192.168.25.11")//
 				.setRequired(true)), //
 		;
 
@@ -98,10 +97,10 @@ public class AppGoeEvcsReadOnly extends AbstractOpenemsAppWithProps<AppGoeEvcsRe
 
 	@Activate
 	public AppGoeEvcsReadOnly(@Reference ComponentManager componentManager, //
-							  ComponentContext componentContext, //
-							  @Reference ConfigurationAdmin cm, //
-							  @Reference ComponentUtil componentUtil, //
-							  @Reference Host host //
+			ComponentContext componentContext, //
+			@Reference ConfigurationAdmin cm, //
+			@Reference ComponentUtil componentUtil, //
+			@Reference Host host //
 	) {
 		super(componentManager, componentContext, cm, componentUtil);
 		this.host = host;
@@ -120,20 +119,12 @@ public class AppGoeEvcsReadOnly extends AbstractOpenemsAppWithProps<AppGoeEvcsRe
 							alias, "Evcs.Goe.Http", //
 							JsonUtils.buildJsonObject() //
 									.addProperty("ip", ip) //
-									.build())
-			);
+									.build()));
 
 			return AppConfiguration.create() //
 					.addTask(Tasks.component(components)) //
 					.build();
 		};
-	}
-
-	@Override
-	public AppDescriptor getAppDescriptor(OpenemsEdgeOem oem) {
-		return AppDescriptor.create() //
-				.setWebsiteUrl(oem.getAppWebsiteUrl(this.getAppId())) //
-				.build();
 	}
 
 	@Override

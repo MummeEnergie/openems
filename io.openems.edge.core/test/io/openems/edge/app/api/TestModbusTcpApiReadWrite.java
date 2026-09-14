@@ -1,12 +1,12 @@
 package io.openems.edge.app.api;
 
 import static io.openems.edge.common.test.DummyUser.DUMMY_ADMIN;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableList;
 
@@ -22,7 +22,7 @@ public class TestModbusTcpApiReadWrite {
 	private ModbusTcpApiReadOnly modbusTcpApiReadOnly;
 	private ModbusTcpApiReadWrite modbusTcpApiReadWrite;
 
-	@Before
+	@BeforeEach
 	public void beforeEach() throws Exception {
 		this.appManagerTestBundle = new AppManagerTestBundle(null, null, t -> {
 			return ImmutableList.of(//
@@ -63,7 +63,8 @@ public class TestModbusTcpApiReadWrite {
 		final var readWriteApp = this.appManagerTestBundle.sut.getInstantiatedApps().get(0);
 
 		// ACTIVE set and false
-		readOnlyApp = this.appManagerTestBundle.sut.getInstantiatedApps().get(0);
+		readOnlyApp = this.appManagerTestBundle.sut.getInstantiatedApps().stream()
+				.filter(app -> app.appId.contains("ReadOnly")).findAny().get();
 
 		assertTrue(readOnlyApp.properties.has("ACTIVE"));
 		var isActive = readOnlyApp.properties.get("ACTIVE").getAsBoolean();

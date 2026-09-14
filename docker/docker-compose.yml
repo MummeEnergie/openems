@@ -1,26 +1,27 @@
 services:
   edge:
     # To pin a specific version, replace :latest with e.g. :2025.10.0-42
-    image: ghcr.io/mumme-it/openems-edge:latest
+    image: ghcr.io/femumme/openems-edge:latest
     container_name: openems-edge
     hostname: edge
     restart: unless-stopped
     volumes:
-      - ./edge/config:/var/opt/openems/config:rw
+      - ./edge/conf:/var/opt/openems/config:rw
       - ./edge/data:/var/opt/openems/data:rw
     ports:
+      - "502:502" # Modbus TCP
       - "8080:8080" # Apache Felix Web Console
       - "8075:8075" # UI WebSocket
-      - "502:502"   # Modbus TCP
 
   ui:
     # To pin a specific version, replace :latest with e.g. :2025.10.0-42
-    image: ghcr.io/mumme-it/openems-ui-edge:latest
+    image: ghcr.io/femumme/openems-ui-edge:latest
     container_name: openems-ui
     hostname: ui
     restart: unless-stopped
     environment:
-      - UI_WEBSOCKET=ws://edge:8075
+      - WEBSOCKET_HOST=edge
+      - WEBSOCKET_PORT=8075
     ports:
       - "80:80"
       - "443:443"

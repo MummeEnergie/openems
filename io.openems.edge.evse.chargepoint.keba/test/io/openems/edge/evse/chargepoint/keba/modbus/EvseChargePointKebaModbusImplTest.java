@@ -1,13 +1,14 @@
 package io.openems.edge.evse.chargepoint.keba.modbus;
 
 import static io.openems.edge.common.type.Phase.SingleOrThreePhase.THREE_PHASE;
-import static io.openems.edge.evse.api.chargepoint.PhaseRotation.L2_L3_L1;
 import static io.openems.edge.evse.chargepoint.keba.common.CommonNaturesTest.testElectricityMeterChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.EvseKebaTest.testEvseKebaChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.KebaModbusTest.prepareKebaModbus;
+import static io.openems.edge.evse.chargepoint.keba.common.KebaModbusTest.testEnergyLimitWriteScale;
 import static io.openems.edge.evse.chargepoint.keba.common.KebaModbusTest.testKebaModbusChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.KebaTest.testKebaChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.enums.LogVerbosity.DEBUG_LOG;
+import static io.openems.edge.meter.api.PhaseRotation.L2_L3_L1;
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
@@ -36,7 +37,6 @@ public class EvseChargePointKebaModbusImplTest {
 						.setId("evseChargePoint0") //
 						.setModbusId("modbus0") //
 						.setWiring(THREE_PHASE) //
-						.setP30hasS10PhaseSwitching(false) //
 						.setPhaseRotation(L2_L3_L1) //
 						.setLogVerbosity(DEBUG_LOG) //
 						.build()) //
@@ -55,7 +55,6 @@ public class EvseChargePointKebaModbusImplTest {
 						.setId("evseChargePoint0") //
 						.setModbusId("modbus0") //
 						.setWiring(THREE_PHASE) //
-						.setP30hasS10PhaseSwitching(false) //
 						.setPhaseRotation(L2_L3_L1) //
 						.setLogVerbosity(DEBUG_LOG) //
 						.build());
@@ -65,7 +64,7 @@ public class EvseChargePointKebaModbusImplTest {
 				.next(new TestCase().onBeforeProcessImage(() -> bridge //
 						.withRegisters(1018, // FIRMWARE: 1.2.0
 								new int[] { 0x0000, 0x27D8 }))) //
-				.next(new TestCase(), 14) //
+				.next(new TestCase(), 16) //
 				.next(new TestCase()//
 						.output(EvseKeba.ChannelId.ENERGY_SESSION, 65300) //
 						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, 7747835L))
@@ -81,6 +80,21 @@ public class EvseChargePointKebaModbusImplTest {
 	}
 
 	@Test
+	public void testEnergyLimitWriteScaleFactor() throws Exception {
+		final var sut = new EvseKebaModbusImpl();
+		prepareKebaModbus(sut) //
+				.activate(MyConfig.create() //
+						.setId("evseChargePoint0") //
+						.setModbusId("modbus0") //
+						.setWiring(THREE_PHASE) //
+						.setPhaseRotation(L2_L3_L1) //
+						.setLogVerbosity(DEBUG_LOG) //
+						.setReadOnly(false) //
+						.build());
+		testEnergyLimitWriteScale(sut, 1000, 100);
+	}
+
+	@Test
 	public void testFirmwareOutdated() throws OpenemsException, Exception {
 		final var sut = new EvseKebaModbusImpl();
 		final var test = prepareKebaModbus(sut) //
@@ -88,7 +102,6 @@ public class EvseChargePointKebaModbusImplTest {
 						.setId("evseChargePoint0") //
 						.setModbusId("modbus0") //
 						.setWiring(THREE_PHASE) //
-						.setP30hasS10PhaseSwitching(false) //
 						.setPhaseRotation(L2_L3_L1) //
 						.setLogVerbosity(DEBUG_LOG) //
 						.build());

@@ -1,9 +1,8 @@
+import { States } from "../../states/states";
 import { JsonrpcRequest } from "../base";
 
 /**
- * Represents a JSON-RPC Request for 'getEdgeConfig'.
- *
- * <pre>
+ * Represents a JSON-RPC Request for 'getEdgeConfig'.<pre>
  * {
  *   "jsonrpc": "2.0",
  *   "id": "UUID",
@@ -13,12 +12,10 @@ import { JsonrpcRequest } from "../base";
  * </pre>
  */
 export class GetEdgeConfigRequest extends JsonrpcRequest {
-
     private static METHOD: string = "getEdgeConfig";
+    protected override requiredState: States = States.EDGE_SELECTED;
 
-    public constructor(
-    ) {
+    public constructor() {
         super(GetEdgeConfigRequest.METHOD, {});
     }
-
 }

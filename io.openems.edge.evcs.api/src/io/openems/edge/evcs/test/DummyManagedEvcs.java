@@ -16,9 +16,9 @@ import io.openems.edge.evcs.api.AbstractManagedEvcsComponent;
 import io.openems.edge.evcs.api.Evcs;
 import io.openems.edge.evcs.api.EvcsPower;
 import io.openems.edge.evcs.api.ManagedEvcs;
-import io.openems.edge.evcs.api.PhaseRotation;
 import io.openems.edge.evcs.api.Status;
 import io.openems.edge.meter.api.ElectricityMeter;
+import io.openems.edge.meter.api.PhaseRotation;
 
 // TODO should extend AbstractDummyElectricityMeter<DummyManagedEvcs>
 public class DummyManagedEvcs extends AbstractManagedEvcsComponent
@@ -180,9 +180,11 @@ public class DummyManagedEvcs extends AbstractManagedEvcsComponent
 
 	@Override
 	public int getMinimumTimeTillChargingLimitTaken() {
-		// Default is one second, to avoid using everywhere a ClockProvider only for
-		// test-cases.
-		return 1;
+		// Default is a few seconds, to avoid using everywhere a ClockProvider only
+		// for test-cases. Kept generous to avoid flakiness on slow/loaded test
+		// machines, where executing a TestCase without an explicit sleep can already
+		// take several seconds (e.g. due to GC pauses).
+		return 6;
 	}
 
 	@Override

@@ -30,6 +30,7 @@ public class ControllerEssPeakShavingImplTest {
 						.setRechargePower(50_000) //
 						.build())
 				.next(new TestCase() //
+						.input("ess0", SymmetricEss.ChannelId.SOC, 50) //
 						.input("ess0", SymmetricEss.ChannelId.ACTIVE_POWER, 0) //
 						.input("meter0", ElectricityMeter.ChannelId.ACTIVE_POWER, 120000) //
 						.output("ess0", SET_ACTIVE_POWER_EQUALS, 6000)) //

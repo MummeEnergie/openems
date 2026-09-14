@@ -1,10 +1,13 @@
 package io.openems.edge.controller.ess.emergencycapacityreserve;
 
 import static io.openems.edge.controller.ess.emergencycapacityreserve.EnergyScheduler.buildEnergyScheduleHandler;
+import static io.openems.edge.energy.api.handler.RescheduleMode.OPTIMIZE_CURRENT_PERIOD;
+import static org.osgi.service.component.annotations.ReferenceCardinality.MANDATORY;
+import static org.osgi.service.component.annotations.ReferencePolicy.STATIC;
+import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
 
 import java.util.OptionalInt;
 
-import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -16,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
+import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
@@ -38,6 +42,7 @@ import io.openems.edge.ess.api.ManagedSymmetricEss;
 		immediate = true, //
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
+@GenerateTargetsFromReferences("ess")
 public class ControllerEssEmergencyCapacityReserveImpl extends AbstractOpenemsComponent
 		implements ControllerEssEmergencyCapacityReserve, EnergySchedulable, Controller, OpenemsComponent {
 
@@ -54,15 +59,13 @@ public class ControllerEssEmergencyCapacityReserveImpl extends AbstractOpenemsCo
 	private ComponentManager componentManager;
 
 	@Reference
-	private ConfigurationAdmin cm;
-
-	@Reference
 	private Sum sum;
 
 	@Reference
 	private Meta meta;
 
-	@Reference
+	@Reference(policy = STATIC, policyOption = GREEDY, cardinality = MANDATORY, //
+			target = "(&(id=${config.ess_id})(enabled=true))")
 	private ManagedSymmetricEss ess;
 
 	private Config config;
@@ -90,7 +93,8 @@ public class ControllerEssEmergencyCapacityReserveImpl extends AbstractOpenemsCo
 	protected void modified(ComponentContext context, String id, String alias, boolean enabled) {
 		super.modified(context, id, alias, enabled);
 		this.updateConfig(this.config);
-		this.energyScheduleHandler.triggerReschedule("ControllerEssEmergencyCapacityReserveImpl::modified()");
+		this.energyScheduleHandler.triggerReschedule("ControllerEssEmergencyCapacityReserveImpl::modified()",
+				OPTIMIZE_CURRENT_PERIOD);
 	}
 
 	@Override
@@ -143,10 +147,6 @@ public class ControllerEssEmergencyCapacityReserveImpl extends AbstractOpenemsCo
 		}
 
 		this._setRangeOfReserveSocOutsideAllowedValue(enableWarning);
-
-		if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {
-			return;
-		}
 	}
 
 	/**

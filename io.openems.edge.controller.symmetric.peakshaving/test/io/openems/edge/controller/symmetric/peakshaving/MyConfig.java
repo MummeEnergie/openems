@@ -11,6 +11,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private String meterId;
 		private int peakShavingPower;
 		private int rechargePower;
+		private int socInfimum;
+		private int socSupremum = 100;
 
 		private Builder() {
 		}
@@ -37,6 +39,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setRechargePower(int rechargePower) {
 			this.rechargePower = rechargePower;
+			return this;
+		}
+
+		public Builder setSocInfimum(int socInfimum) {
+			this.socInfimum = socInfimum;
+			return this;
+		}
+
+		public Builder setSocSupremum(int socSupremum) {
+			this.socSupremum = socSupremum;
 			return this;
 		}
 
@@ -79,6 +91,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int rechargePower() {
 		return this.builder.rechargePower;
+	}
+
+	@Override
+	public int socInfimum() {
+		return this.builder.socInfimum;
+	}
+
+	@Override
+	public int socSupremum() {
+		return this.builder.socSupremum;
 	}
 
 }

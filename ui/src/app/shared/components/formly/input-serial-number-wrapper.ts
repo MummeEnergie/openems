@@ -1,61 +1,73 @@
-import { Component } from "@angular/core";
+import { Component, ChangeDetectionStrategy } from "@angular/core";
 import { FieldWrapper } from "@ngx-formly/core";
+import { FormlyUtils } from "./formly-utils";
 
 @Component({
     selector: "formly-input-serial-number",
     templateUrl: "./input-serial-number-wrapper.html",
     standalone: false,
-    styles: [`
-        .input-box {
-            border: 1px solid var(--ion-color-dark);
-            border-radius: 2px; /* Add rounded corners */
-            width: 100%;
-            padding-left: 2px;
-        }
+    changeDetection: ChangeDetectionStrategy.Eager,
+    styles: [
+        `
+            .input-box-wrapper {
+                border-bottom: 1px solid var(--ion-color-dark);
+            }
 
-        .input-box ion-item {
-            --min-height: auto;
-        }
+            .input-box {
+                border: 1px solid var(--ion-color-dark);
+                border-bottom: 1px solid var(--ion-color-dark);
+                border-radius: 2px; /* Add rounded corners */
+                width: 100%;
+                padding-left: 2px;
+            }
 
-        .disabled-field {
-            pointer-events: none; /* Disable interactions */
-            opacity: 0.5; /* Greyed-out effect */
-        }
+            .input-box ion-item {
+                --min-height: auto;
+            }
 
-        .disabled-field ion-input,
-        .disabled-field ion-label {
-            color: var(--ion-color-medium); /* Adjust color for a disabled look */
-        }
+            .disabled-field {
+                pointer-events: none; /* Disable interactions */
+                opacity: 0.5; /* Greyed-out effect */
+            }
 
-        .text-center {
-            text-align: center; /* Default for larger screens */
-        }
+            .disabled-field ion-input,
+            .disabled-field ion-label {
+                color: var(--ion-color-medium); /* Adjust color for a disabled look */
+            }
 
-        @media (max-width: 768px) {
             .text-center {
-                text-align: --webkit-center; /* Override for mobile view */
+                text-align: center; /* Default for larger screens */
             }
 
-            .input-box {
-                max-width: 90%; /* Shrink width for small screens */
-            }
-        }
+            @media (max-width: 768px) {
+                .text-center {
+                    text-align: --webkit-center; /* Override for mobile view */
+                }
 
-        @media (max-width: 480px) {
-            .input-box {
-                max-width: 100%; /* Full width for very small screens */
+                .input-box {
+                    max-width: 90%; /* Shrink width for small screens */
+                }
             }
-        }
-    `],
+
+            @media (max-width: 480px) {
+                .input-box {
+                    max-width: 100%; /* Full width for very small screens */
+                }
+            }
+        `,
+    ],
 })
 export class FormlyInputSerialNumberWrapperComponent extends FieldWrapper {
-
     protected isFocused: boolean = false;
+
+    public get borderBottomColor(): { [key: string]: string } {
+        return FormlyUtils.getControlStyle(this.formControl, this.isFocused, "border-bottom-color");
+    }
 
     /**
      * Indicates the field if it is focued on not. helpful for setting highlight for the input field.
      *
-     * @param focused boolean value indicating the field is focused or not.
+     * @param focused Boolean value indicating the field is focused or not.
      */
     protected setFocus(focused: boolean): void {
         this.isFocused = focused;
@@ -64,8 +76,8 @@ export class FormlyInputSerialNumberWrapperComponent extends FieldWrapper {
     protected onCheckboxChange(checked: boolean): void {
         this.props.checkbox.value = checked;
 
-        if (this.props.checkbox.updateFn) {
-            this.props.checkbox.updateFn(checked);
+        if (this.props.checkbox.onValueChanged) {
+            this.props.checkbox.onValueChanged(checked);
         }
     }
 }

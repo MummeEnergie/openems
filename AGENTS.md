@@ -1,124 +1,51 @@
-# OpenEMS (Mumme-IT Fork)
+# AGENTS.md
 
-OpenEMS is an open-source energy management platform for edge devices (Raspberry Pi) and a cloud backend; this fork adds EVCS dynamic pricing controllers and custom OSGi bundles on top of the upstream codebase.
+## Project Overview
 
-## Repository Layout
+OpenEMS (FEMS) is a modular energy management system:
 
-| Path | What it is |
-|---|---|
-| `io.openems.edge.*/`, `io.openems.backend.*/` | OSGi bundles (Edge + Backend) |
-| `io.openems.edge.controller.evcs.*/` | EVCS dynamic pricing controllers (Mumme-IT custom) |
-| `io.openems.edge.evcs.pricing.*/` | EVCS pricing providers (core, eaaze, mumaxdisplay) |
-| `ui/` | Angular/Ionic progressive web app |
-| `docs/` | Mumme-IT specs and implementation plans |
-| `plans/` | Legacy implementation plans |
-| `edge-data-dir/` | OSGi config for local dev edge (gitignored) |
-| `mise.toml`, `.mise/tasks/` | Build, run, deploy, and ops tasks (via [mise](https://mise.jdx.dev)) |
-| `evcs-dynamic-pricing.md` | Architecture doc for the EVCS pricing feature |
+- **Edge** (`io.openems.edge.*`) runs on site, controls devices, executes energy logic and runs mostly on low-power computers (1gb ram, 2 cores, 4gb disk).
+- **Backend** (`io.openems.backend.*`) aggregates, monitors, and supports remote control.
+- **UI** (`ui/`) is the Angular/Ionic frontend for real-time monitoring.
 
-## Architecture
+Main stacks: Java 21, Gradle, OSGi/bnd workspace, JUnit, Angular/Ionic.
 
-- Pattern: OSGi monorepo — Edge runtime + Backend runtime + Angular UI, resolved via bnd/bndtools
-- Language(s): Java 21 (OSGi bundles), TypeScript/Angular 17 + Ionic (UI)
-- Key frameworks: OSGi (Apache Felix), bnd 7, Gradle 9, Angular + Ionic, JUnit 4, Karma/Jasmine
-- Data layer: InfluxDB / TimescaleDB (time-series), Odoo (metadata/CRM), optional file-based metadata
+## Working Style
 
-## Modules / Components
+- Prefer small, focused diffs and avoid unrelated reformatting.
+- Prefer self-explanatory code with clear names and simple structure. Add comments only when they explain non-obvious intent, constraints, or tradeoffs. Comments should be only in English.
+- Preserve existing behavior unless a change is explicitly requested.
+- Follow nearby code and existing FEMS/OpenEMS utilities, modules, helper APIs, and configuration patterns before adding abstractions.
+- Run the narrowest relevant validation for the changed area.
+- Do not bump dependencies, wrappers, plugins, or introduce new frameworks unless explicitly requested.
 
-| Module | Path | Responsibility |
-|---|---|---|
-| Edge application | `io.openems.edge.application/` | OSGi Edge runtime entry point (`EdgeApp.bndrun`) |
-| Backend application | `io.openems.backend.application/` | OSGi Backend runtime entry point (`BackendApp.bndrun`) |
-| Edge common | `io.openems.edge.common/` | Shared Edge APIs, channel framework, component lifecycle |
-| Backend common | `io.openems.backend.common/` | Shared Backend APIs and abstractions |
-| Common | `io.openems.common/` | Shared DTOs, JSON-RPC protocol, constants |
-| ESS bundles | `io.openems.edge.ess.*/` | Energy Storage System drivers (Fenecon, Samsung, BYD, ...) |
-| Battery bundles | `io.openems.edge.battery.*/` | Battery drivers (Fenecon Home, BYD, Soltaro, BMW, ...) |
-| EVCS bundles | `io.openems.edge.evcs.*/` | EV Charging Station drivers (go-e, KEBA, OCPP, Alpitronic, ...) |
-| EVCS pricing controllers | `io.openems.edge.controller.evcs.*/` | EVCS dynamic pricing (fixed, PV, battery, grid-price strategies) |
-| ESS controllers | `io.openems.edge.controller.ess.*/` | ESS control strategies (balancing, peak-shaving, ToU tariff, ...) |
-| Bridge bundles | `io.openems.edge.bridge.*/` | Protocol bridges (Modbus, HTTP, M-Bus, 1-Wire) |
-| Timedata backends | `io.openems.backend.timedata.*/` | Time-series storage (InfluxDB, TimescaleDB, aggregated) |
-| Metadata backends | `io.openems.backend.metadata.*/` | Device/user metadata (Odoo, file, dummy) |
-| UI | `ui/` | Angular/Ionic progressive web app for monitoring and configuration |
+## Java / Edge / Backend
 
-## Data Flow
+- Bundles are top-level directories. Components use OSGi annotations such as `@Component`, `@Activate`, `@Reference`, `@Designate`, and config via `@ObjectClassDefinition`.
+- Device capabilities are expressed through natures like `ManagedSymmetricEss`, `ElectricityMeter`, and `EssDcCharger`.
+- Implementation classes must explicitly list all parent interfaces of child natures; otherwise OpenEMS nature detection does not work.
+- Channels are the main runtime data exchange mechanism; prefer existing typed `ChannelId` patterns and static imports for channel IDs/constants.
+- Edge logic is cycle/event driven via `EdgeEventConstants` topics. For controller changes, consider scheduler order, channel interactions, ESS/grid/PV/load energy flow, and production debugging.
+- Modbus devices should use the existing `io.openems.edge.bridge.modbus` protocol/register mapping patterns.
+- Checkstyle is enforced via `cnf/checkstyle.xml` with zero warnings.
+- Add new bundles/components only when explicitly required; follow the closest existing bundle structure.
+- Useful Java entry point bundles: `io.openems.edge.controller.ess.balancing`, `io.openems.edge.evse.chargepoint.keba`, and `io.openems.edge.evse.chargepoint.mennekes`; inspect matching `Config.java`, `*Impl.java`, and `*Test.java` files before copying patterns.
 
-- Edge reads hardware (batteries, inverters, EVCS, meters) via bridge bundles over Modbus/HTTP/OCPP
-- Controllers compute setpoints each cycle and write back via channels
-- Edge API controller streams channel data to Backend via WebSocket (JSON-RPC)
-- Backend stores time-series in InfluxDB/TimescaleDB; UI reads via Backend WebSocket
+## UI
 
-## Key Entry Points
+- For Angular/Ionic work under `ui/`, also follow `ui/AGENTS.md`.
 
-| Entrypoint | Path | Purpose |
-|---|---|---|
-| Edge bndrun | `io.openems.edge.application/EdgeApp.bndrun` | Bundle resolution manifest for Edge |
-| Backend bndrun | `io.openems.backend.application/BackendApp.bndrun` | Bundle resolution manifest for Backend |
-| Edge JAR | `build/openems-edge.jar` | Built OSGi Edge runtime |
-| Backend JAR | `build/openems-backend.jar` | Built OSGi Backend runtime |
-| UI dev server | `ui/` | `ng serve -c openems-edge-dev` |
-| Docker Edge | `Dockerfile` | Edge container image (OpenJDK 21) |
+## Tests
 
-## External Dependencies
+Use dedicated skills for detailed test-writing patterns:
 
-- **InfluxDB** -- time-series storage for channel data
-- **TimescaleDB** -- alternative/aggregate time-series storage
-- **Odoo** -- ERP metadata backend (edges, users, devices)
-- **OCPP server** -- protocol endpoint for OCPP-compatible EV chargers
-- **Codecov** -- coverage reporting (CI)
+- `.github/skills/oe-junit/SKILL.md` for Java Edge/Backend tests.
+- `.github/skills/oe-ui-test/SKILL.md` for Angular/Ionic UI tests.
 
-## Developer Notes
+Preserve intentional trailing `//` markers in fluent `ComponentTest` chains.
 
-All commands run from the **repo root**.
+## Validation
 
-### Build & Test
-
-| Command | What it does |
-|---|---|
-| `mise run build:edge` | Build the Edge JAR (`./gradlew buildEdge`) |
-| `mise run build:ui` | Production UI build |
-| `mise run test` | Run all Java tests |
-| `mise run test:ui` | Run UI tests with coverage |
-| `mise run lint` | Checkstyle on all Java bundles |
-| `mise run lint:ui` | ESLint on UI |
-| `mise run resolve` | Re-resolve OSGi bndrun files after bundle changes |
-
-### Local Dev
-
-| Command | What it does |
-|---|---|
-| `mise run run:edge` | Run Edge locally (requires built JAR + `edge-data-dir/`) |
-| `mise run run:ui` | Start UI dev server with hot reload |
-| `mise run start:remote-edge` | Start remote Edge via Docker Compose |
-
-```bash
-# Terminal 1
-mise run run:edge
-
-# Terminal 2
-mise run run:ui
-```
-
-**Default credentials** (Edge only): username `admin`, password `admin`.
-UI dev config auto-connects as GUEST; navigate to `http://localhost:4200/login` to log in.
-
-**Restart Edge after JAR rebuild or config changes** -- OSGi ConfigAdmin does not hot-reload files.
-Override the data dir: `EDGE_DATA_DIR=/path/to/dir mise run run:edge`
-
-### Deploy
-
-| Command | What it does |
-|---|---|
-| `mise run deploy-edge` | Deploy Edge JAR to Pi (interactive confirmation) |
-| `mise run deploy-ui` | Deploy UI build to Pi (interactive confirmation) |
-| `mise run copy-config` | Copy OSGi config between edges |
-| `mise run publish-builds` | Publish Edge + UI builds to openems-build repo |
-
-Deploy targets: `pi` (default, 192.168.89.204) or `revpi` (revpi134791.local).
-Pass target as argument: `mise run deploy-edge revpi`
-
-### Toolchain
-
-- Java 21 (source + target); configured in `gradle.properties`
-- After adding/removing bundles: `mise run resolve` and commit updated bndrun files
+- Java: use the Gradle wrapper and prefer single-bundle tasks, for example `.\gradlew.bat :bundle.name:test` and `.\gradlew.bat :bundle.name:checkstyleMain` on Windows PowerShell.
+- Java pre-PR checks: `.\gradlew.bat checkstyleAll`; use `.\gradlew.bat buildEdge` or `.\gradlew.bat buildBackend` when app assembly/resolve behavior is affected.
+- Avoid blocking long-running/watch commands unless explicitly requested.

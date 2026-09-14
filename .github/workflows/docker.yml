@@ -17,16 +17,20 @@ jobs:
           - image: edge
             dockerfile: tools/docker/edge/Dockerfile
           - image: ui-edge
-            dockerfile: tools/docker/ui/Dockerfile
-            args: |
-              VERSION=openems,openems-edge-docker
+            dockerfile: tools/docker/ui/Dockerfile.edge
     permissions:
       packages: write
       contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Extract OpenEMS version from OpenemsConstants.java
         id: openems_version
@@ -38,30 +42,29 @@ jobs:
           OPENEMS_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           echo "version=${OPENEMS_VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: ${{ github.REPOSITORY_OWNER }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/openems-${{ matrix.image }}
+          images: |
+            ghcr.io/${{ github.repository_owner }}/openems-${{ matrix.image }}
+          labels: |
+            org.opencontainers.image.authors=OpenEMS
+            org.opencontainers.image.title=OpenEMS ${{ matrix.image }}
+            org.opencontainers.image.vendor=OpenEMS <openems.io>
           tags: |
             type=raw,value=${{ steps.openems_version.outputs.version }}-${{ github.run_number }},enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push Docker images
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -69,4 +72,5 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.args }}
+          provenance: mode=max
+          sbom: true

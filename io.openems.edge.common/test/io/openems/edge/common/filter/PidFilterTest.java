@@ -1,9 +1,10 @@
 package io.openems.edge.common.filter;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Use this class to test if the PID filter does what it should. Test cases can
@@ -13,8 +14,8 @@ import org.junit.Test;
  */
 public class PidFilterTest {
 
-	@Before
-	public void prepare() {
+	@BeforeEach
+	void prepare() {
 		System.out.println(String.format("%10s  %10s  %10s", "input", "output", "expected"));
 	}
 
@@ -38,7 +39,7 @@ public class PidFilterTest {
 		this.t(p, 8981, 20000, 20168);
 		this.t(p, 13963, 20000, 21979);
 		this.t(p, 17885, 20000, 22613);
-		this.t(p, 20473, 20000, 22472);
+		this.t(p, 20473, 20000, 22471);
 		this.t(p, 21826, 20000, 21924);
 		this.t(p, 22234, 20000, 21254);
 		this.t(p, 22038, 20000, 20642);
@@ -149,6 +150,25 @@ public class PidFilterTest {
 
 		// Cycle 10
 		this.t(p, 1000, 5000, 3600);
+	}
+
+	@Test
+	public void testDefaultPidRampsAndConvergesToFullTargetAtLimit() {
+		var pidFilter = new PidFilter();
+		pidFilter.setLimits(-730_000, 0);
+
+		var power = pidFilter.applyPidFilter(0, -730_000);
+		assertEquals(-219_000, power);
+		assertTrue(power > -730_000 && power < 0, "PID must ramp towards the target on its first cycle");
+
+		power = pidFilter.applyPidFilter(power, -730_000);
+		assertEquals(-350_400, power);
+
+		for (var cycle = 2; cycle < 100; cycle++) {
+			power = pidFilter.applyPidFilter(power, -730_000);
+		}
+
+		assertEquals(-730_000, power, "PID must converge to the full target");
 	}
 
 	private void t(PidFilter p, int input, int output, int expectedOutput) {

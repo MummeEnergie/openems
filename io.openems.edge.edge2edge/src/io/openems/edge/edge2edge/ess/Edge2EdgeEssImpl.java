@@ -1,5 +1,7 @@
 package io.openems.edge.edge2edge.ess;
 
+import static io.openems.edge.common.channel.ChannelUtils.setValue;
+import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE;
 import static org.osgi.service.component.annotations.ReferenceCardinality.MANDATORY;
 import static org.osgi.service.component.annotations.ReferenceCardinality.OPTIONAL;
 import static org.osgi.service.component.annotations.ReferencePolicy.DYNAMIC;
@@ -9,7 +11,6 @@ import static org.osgi.service.component.annotations.ReferencePolicyOption.GREED
 import java.util.List;
 import java.util.function.Consumer;
 
-import io.openems.edge.common.event.EdgeEventConstants;
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
@@ -17,9 +18,8 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
-import org.osgi.service.component.annotations.ReferencePolicy;
-import org.osgi.service.component.annotations.ReferencePolicyOption;
+import org.osgi.service.event.Event;
+import org.osgi.service.event.EventHandler;
 import org.osgi.service.event.propertytypes.EventTopics;
 import org.osgi.service.metatype.annotations.Designate;
 
@@ -47,14 +47,14 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 @Designate(ocd = Config.class, factory = true)
 @Component(//
 		name = "Edge2Edge.Ess", //
+		immediate = true, //
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
 @EventTopics({ //
-		EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE, //
-		EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS //
+		TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
 })
 public class Edge2EdgeEssImpl extends AbstractEdge2Edge implements ManagedSymmetricEss, AsymmetricEss, SymmetricEss,
-		Edge2EdgeEss, Edge2Edge, ModbusComponent, TimedataProvider, OpenemsComponent {
+		Edge2EdgeEss, Edge2Edge, ModbusComponent, TimedataProvider, EventHandler, OpenemsComponent {
 
 	private final CalculateEnergyFromPower calculateActiveChargeEnergy = new CalculateEnergyFromPower(this,
 			SymmetricEss.ChannelId.ACTIVE_CHARGE_ENERGY);
@@ -64,8 +64,8 @@ public class Edge2EdgeEssImpl extends AbstractEdge2Edge implements ManagedSymmet
 	@Reference
 	private ConfigurationAdmin cm;
 
-	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
-	private volatile Power power = null;
+	@Reference(policy = DYNAMIC, policyOption = GREEDY, cardinality = OPTIONAL)
+	private volatile Power power;
 
 	@Reference(policy = DYNAMIC, policyOption = GREEDY, cardinality = OPTIONAL)
 	private volatile Timedata timedata;
@@ -113,10 +113,12 @@ public class Edge2EdgeEssImpl extends AbstractEdge2Edge implements ManagedSymmet
 		if (modbusSlaveNatureTable.getNatureClass() == ManagedSymmetricEss.class) {
 			switch (record.getOffset()) {
 			case 0: // "Minimum Power Set-Point"
-				return (value) -> this._setAllowedChargePower(TypeUtils.getAsType(OpenemsType.INTEGER, value));
+				return (value) -> setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER,
+						TypeUtils.getAsType(OpenemsType.INTEGER, value));
 
 			case 2: // "Maximum Power Set-Point"
-				return (value) -> this._setAllowedDischargePower(TypeUtils.getAsType(OpenemsType.INTEGER, value));
+				return (value) -> setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_DISCHARGE_POWER,
+						TypeUtils.getAsType(OpenemsType.INTEGER, value));
 			}
 		}
 		return null;
@@ -152,8 +154,14 @@ public class Edge2EdgeEssImpl extends AbstractEdge2Edge implements ManagedSymmet
 	}
 
 	@Override
+	public void handleEvent(Event event) {
+		switch (event.getTopic()) {
+		case TOPIC_CYCLE_AFTER_PROCESS_IMAGE -> this.calculateEnergy();
+		}
+	}
+
+	@Override
 	public void applyPower(int activePower, int reactivePower) throws OpenemsNamedException {
-		this.calculateEnergy();
 		this.setRemoteActivePowerEquals((float) activePower);
 		this.setRemoteReactivePowerEquals((float) reactivePower);
 	}

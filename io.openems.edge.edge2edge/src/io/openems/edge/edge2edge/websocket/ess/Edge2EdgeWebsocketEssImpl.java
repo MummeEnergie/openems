@@ -1,17 +1,18 @@
 package io.openems.edge.edge2edge.websocket.ess;
 
+import static io.openems.common.utils.IntUtils.maxInteger;
+import static io.openems.common.utils.IntUtils.minInteger;
 import static java.util.stream.Collectors.toSet;
+import static org.osgi.service.component.annotations.ReferenceCardinality.OPTIONAL;
+import static org.osgi.service.component.annotations.ReferencePolicy.DYNAMIC;
+import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
 
-import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
-import org.osgi.service.component.annotations.ReferencePolicy;
-import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +24,9 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.ChannelCategory;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsRuntimeException;
+import io.openems.common.function.Disposable;
 import io.openems.common.jsonrpc.request.GetChannelsOfComponent;
+import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.common.types.ChannelAddress;
 import io.openems.common.types.OpenemsType;
 import io.openems.common.utils.JsonUtils;
@@ -35,7 +38,6 @@ import io.openems.edge.common.type.TypeUtils;
 import io.openems.edge.edge2edge.websocket.Edge2EdgeWebsocket;
 import io.openems.edge.edge2edge.websocket.bridge.BridgeComponentStateHandler;
 import io.openems.edge.edge2edge.websocket.bridge.ChannelSubscriber;
-import io.openems.edge.edge2edge.websocket.bridge.Disposable;
 import io.openems.edge.edge2edge.websocket.bridge.Edge2EdgeWebsocketBridge;
 import io.openems.edge.ess.api.AsymmetricEss;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
@@ -48,15 +50,13 @@ import io.openems.edge.ess.power.api.Power;
 		immediate = true, //
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
+@GenerateTargetsFromReferences("Bridge")
 public class Edge2EdgeWebsocketEssImpl extends AbstractOpenemsComponent implements ManagedSymmetricEss, AsymmetricEss,
-		SymmetricEss, Edge2EdgeEss, Edge2EdgeWebsocket, OpenemsComponent {
+		SymmetricEss, Edge2EdgeWebsocketEss, Edge2EdgeWebsocket, OpenemsComponent {
 
 	private final Logger log = LoggerFactory.getLogger(Edge2EdgeWebsocketEssImpl.class);
 
-	@Reference
-	private ConfigurationAdmin cm;
-
-	@Reference(cardinality = ReferenceCardinality.OPTIONAL, policyOption = ReferencePolicyOption.GREEDY, policy = ReferencePolicy.DYNAMIC)
+	@Reference(cardinality = OPTIONAL, policyOption = GREEDY, policy = DYNAMIC)
 	private volatile Power power;
 
 	private Config config;
@@ -69,9 +69,8 @@ public class Edge2EdgeWebsocketEssImpl extends AbstractOpenemsComponent implemen
 	 *
 	 * @param bridge the bridge to bind
 	 */
-	@Reference(policy = ReferencePolicy.DYNAMIC, //
-			policyOption = ReferencePolicyOption.GREEDY, //
-			cardinality = ReferenceCardinality.OPTIONAL)
+	@Reference(policy = DYNAMIC, policyOption = GREEDY, cardinality = OPTIONAL, //
+			target = "(&(id=${config.bridge_id})(enabled=true))")
 	public void bindBridge(Edge2EdgeWebsocketBridge bridge) {
 		this.bridgeStateHandler.bindBridge(bridge);
 
@@ -112,7 +111,7 @@ public class Edge2EdgeWebsocketEssImpl extends AbstractOpenemsComponent implemen
 				ManagedSymmetricEss.ChannelId.values(), //
 				StartStoppable.ChannelId.values(), //
 				Edge2EdgeWebsocket.ChannelId.values(), //
-				Edge2EdgeEss.ChannelId.values() //
+				Edge2EdgeWebsocketEss.ChannelId.values() //
 		);
 		this._setMaxApparentPower(Integer.MAX_VALUE); // has no effect, as long as AllowedCharge/DischargePower are null
 
@@ -164,32 +163,12 @@ public class Edge2EdgeWebsocketEssImpl extends AbstractOpenemsComponent implemen
 				}
 			}
 		});
-
-		this.getSetActivePowerEqualsChannel().onSetNextWrite(t -> {
-			if (this.config.remoteAccessMode() == AccessMode.READ_ONLY) {
-				return;
-			}
-
-			this.bridgeStateHandler.setChannelValue(ManagedSymmetricEss.ChannelId.SET_ACTIVE_POWER_EQUALS.id(),
-					new JsonPrimitive(t));
-		});
-
-		this.getSetReactivePowerEqualsChannel().onSetNextWrite(t -> {
-			if (this.config.remoteAccessMode() == AccessMode.READ_ONLY) {
-				return;
-			}
-
-			this.bridgeStateHandler.setChannelValue(ManagedSymmetricEss.ChannelId.SET_REACTIVE_POWER_EQUALS.id(),
-					new JsonPrimitive(t));
-		});
 	}
 
 	@Activate
 	protected void activate(ComponentContext context, Config config) {
 		super.activate(context, config.id(), config.alias(), config.enabled());
 		this.config = config;
-
-		OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "Bridge", config.bridge_id());
 
 		this.bridgeStateHandler.updateComponentId(config.enabled() ? config.remoteComponentId() : null);
 	}
@@ -205,11 +184,14 @@ public class Edge2EdgeWebsocketEssImpl extends AbstractOpenemsComponent implemen
 	public String debugLog() {
 		return "SoC:" + this.getSoc().asString() //
 				+ "|L:" + this.getActivePower().asString() //
-				+ "|Allowed:"
-				+ TypeUtils.max(this.getAllowedChargePower().get(),
+				+ "|Allowed:" //
+				+ maxInteger(//
+						this.getAllowedChargePower().get(), //
 						TypeUtils.multiply(this.getMaxApparentPower().get(), -1))
 				+ ";" //
-				+ TypeUtils.min(this.getAllowedDischargePower().get(), this.getMaxApparentPower().get()) //
+				+ minInteger(//
+						this.getAllowedDischargePower().get(), //
+						this.getMaxApparentPower().get()) //
 				+ "|" + this.getGridModeChannel().value().asOptionString();
 	}
 
@@ -224,8 +206,14 @@ public class Edge2EdgeWebsocketEssImpl extends AbstractOpenemsComponent implemen
 
 	@Override
 	public void applyPower(int activePower, int reactivePower) throws OpenemsNamedException {
-		this.setActivePowerEquals(activePower);
-		this.setReactivePowerEquals(reactivePower);
+		if (this.config.remoteAccessMode() == AccessMode.READ_ONLY) {
+			return;
+		}
+
+		this.bridgeStateHandler.setChannelValue(ManagedSymmetricEss.ChannelId.SET_ACTIVE_POWER_EQUALS.id(),
+				new JsonPrimitive(activePower));
+		this.bridgeStateHandler.setChannelValue(ManagedSymmetricEss.ChannelId.SET_REACTIVE_POWER_EQUALS.id(),
+				new JsonPrimitive(reactivePower));
 	}
 
 	@Override

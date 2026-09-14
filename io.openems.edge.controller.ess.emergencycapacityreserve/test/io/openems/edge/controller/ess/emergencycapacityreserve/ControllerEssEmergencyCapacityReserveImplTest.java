@@ -11,13 +11,12 @@ import static io.openems.edge.ess.api.ManagedSymmetricEss.ChannelId.SET_ACTIVE_P
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.MAX_APPARENT_POWER;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.SOC;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import io.openems.common.function.ThrowingRunnable;
 import io.openems.edge.common.sum.DummySum;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.DummyComponentManager;
-import io.openems.edge.common.test.DummyConfigurationAdmin;
 import io.openems.edge.common.test.DummyMeta;
 import io.openems.edge.controller.ess.emergencycapacityreserve.statemachine.StateMachine.State;
 import io.openems.edge.controller.test.ControllerTest;
@@ -29,9 +28,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testReserveSocRange() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -45,8 +43,7 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
@@ -61,8 +58,7 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
@@ -77,9 +73,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -93,9 +88,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -112,9 +106,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testReachTargetPower() throws Exception {
 		var controllerTest = new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -156,9 +149,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testAllStates() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -201,9 +193,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testIncreaseRampByNoLimitState() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -228,9 +219,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testDecreaseRampByAboveReserveSocState() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -297,9 +287,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testDecreaseRampByAtReserveSocState() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -342,9 +331,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testDecreaseRampByUnderReserveSocState() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -392,9 +380,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testDecreaseRampByForceStartChargeState() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //
 				.activate(MyConfig.create() //
 						.setId("ctrl0") //
@@ -463,9 +450,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0") //
 						.withMaxApparentPower(10000)) //
 				.activate(MyConfig.create() //
@@ -496,9 +482,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testIncreaseRampToMaxApparentPower() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta")) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0") //
 						.withMaxApparentPower(10000)) //
 				.activate(MyConfig.create() //
@@ -562,9 +547,8 @@ public class ControllerEssEmergencyCapacityReserveImplTest {
 	public void testGridChargingOn() throws Exception {
 		new ControllerTest(new ControllerEssEmergencyCapacityReserveImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("sum", new DummySum()) //
-				.addReference("meta", new DummyMeta("_meta") //
+				.addReference("meta", new DummyMeta() //
 						.withIsEssChargeFromGridAllowed(true)) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0") //
 						.withMaxApparentPower(10000)) //

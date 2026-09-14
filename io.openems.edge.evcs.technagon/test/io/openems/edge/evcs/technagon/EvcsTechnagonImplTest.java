@@ -19,9 +19,10 @@ import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.bridge.modbus.test.DummyModbusBridge;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.test.ComponentTest;
-import io.openems.edge.common.test.DummyConfigurationAdmin;
+import io.openems.common.test.DummyConfigurationAdmin;
 import io.openems.edge.evcs.api.Status;
 import io.openems.edge.evcs.test.DummyEvcsPower;
+import io.openems.edge.meter.api.PhaseRotation;
 
 public class EvcsTechnagonImplTest {
 
@@ -36,6 +37,7 @@ public class EvcsTechnagonImplTest {
 					offset + 0x100, offset + 0x101, offset + 0x102, offset + 0x103)));
 			assertEquals(4, tasks.stream().filter(FC3ReadRegistersTask.class::isInstance).count());
 			assertEquals(4, tasks.stream().filter(FC6WriteRegisterTask.class::isInstance).count());
+			assertEquals(PhaseRotation.L1_L2_L3, sut.getPhaseRotation());
 		}
 	}
 

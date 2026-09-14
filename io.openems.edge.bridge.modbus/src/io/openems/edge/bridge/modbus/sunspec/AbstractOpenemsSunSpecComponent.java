@@ -43,6 +43,7 @@ import io.openems.edge.bridge.modbus.api.task.Task.ExecuteState;
 import io.openems.edge.bridge.modbus.sunspec.Point.BitFieldPoint;
 import io.openems.edge.bridge.modbus.sunspec.Point.BitFieldPoint.SunSpecBitPoint;
 import io.openems.edge.bridge.modbus.sunspec.Point.ChannelIdPoint;
+import io.openems.edge.bridge.modbus.sunspec.Point.EnumFieldPoint;
 import io.openems.edge.bridge.modbus.sunspec.Point.ModbusElementPoint;
 import io.openems.edge.bridge.modbus.sunspec.Point.ScaleFactorPoint;
 import io.openems.edge.bridge.modbus.sunspec.Point.ScaledValuePoint;
@@ -168,27 +169,17 @@ public abstract class AbstractOpenemsSunSpecComponent extends AbstractOpenemsMod
 	 * @param enabled               Whether the component should be enabled.
 	 *                              Typically 'config.enabled()'
 	 * @param unitId                Unit-ID of the Modbus target
-	 * @param cm                    An instance of ConfigurationAdmin. Receive it
-	 *                              using @Reference
-	 * @param modbusReference       The name of the @Reference setter method for the
-	 *                              Modbus bridge - e.g. 'Modbus' if you have a
-	 *                              setModbus()-method
-	 * @param modbusId              The ID of the Modbus bridge. Typically
-	 *                              'config.modbus_id()'
 	 * @param readFromCommonBlockNo ignore all SunSpec blocks before
 	 *                              'readFromCommonBlockNo' was passed
-	 * @return true if the target filter was updated. You may use it to abort the
-	 *         activate() method.
 	 * @throws OpenemsException on error
 	 */
-	protected boolean activate(ComponentContext context, String id, String alias, boolean enabled, int unitId,
-			ConfigurationAdmin cm, String modbusReference, String modbusId, int readFromCommonBlockNo)
-			throws OpenemsException {
+	protected void activate(ComponentContext context, String id, String alias, boolean enabled, int unitId,
+			int readFromCommonBlockNo) throws OpenemsException {
 		this.readFromCommonBlockNo = readFromCommonBlockNo;
 
 		this.reinitializeSunSpecChannels(true);
 
-		return super.activate(context, id, alias, enabled, unitId, cm, modbusReference, modbusId);
+		super.activate(context, id, alias, enabled, unitId);
 	}
 
 	protected void reinitializeSunSpecChannels() {
@@ -502,6 +493,25 @@ public abstract class AbstractOpenemsSunSpecComponent extends AbstractOpenemsMod
 			var alternativeBitPoints = this.getBitPoints(bfp);
 			yield bfp.generateModbusElements(this, channelId -> this.addChannel(channelId), startAddress,
 					alternativeBitPoints);
+		}
+
+		case EnumFieldPoint efp -> {
+			final var points = efp.points;
+			for (var point : points) {
+				var channelId = point.getChannelId();
+				this.addChannel(channelId);
+			}
+			final var uwe = efp.generateModbusElement(startAddress, t -> {
+				for (var point : points) {
+					try {
+						final var channel = this.getSunSpecChannelOrError(point);
+						channel.setNextValue(t.test(point));
+					} catch (Exception e) {
+						this.logWarn(this.log, "Missing SunSpec Channel for point [" + point + "]: " + e.getMessage());
+					}
+				}
+			});
+			yield List.of(uwe);
 		}
 
 		case ModbusElementPoint mep -> {

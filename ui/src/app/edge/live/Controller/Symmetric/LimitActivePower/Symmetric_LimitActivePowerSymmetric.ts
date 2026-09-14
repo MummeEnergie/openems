@@ -19,4 +19,3 @@ import { ModalComponent } from "./modal/modal";
 })
 export class Controller_LimitActivePowerSymmetric { }
 
-

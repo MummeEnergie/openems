@@ -9,6 +9,7 @@ import com.google.gson.JsonElement;
 
 import io.openems.common.channel.Level;
 import io.openems.common.channel.PersistencePriority;
+import io.openems.common.function.Disposable;
 import io.openems.common.jsonrpc.base.JsonrpcRequest;
 import io.openems.common.jsonrpc.base.JsonrpcResponseSuccess;
 import io.openems.common.types.ChannelAddress;
@@ -21,7 +22,7 @@ import io.openems.edge.common.component.OpenemsComponent;
 public interface Edge2EdgeWebsocketBridge extends OpenemsComponent {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
-		CONNECTION_STATE(Doc.of(ConnectionStateOption.values()) //
+		CONNECTION_STATE(Doc.of(ConnectionStateOption.values())//
 				.persistencePriority(PersistencePriority.HIGH)), //
 		NO_CONNECTION(Doc.of(Level.WARNING)), //
 		NOT_AUTHENTICATED(Doc.of(Level.INFO)), //
@@ -29,7 +30,7 @@ public interface Edge2EdgeWebsocketBridge extends OpenemsComponent {
 		/**
 		 * Copies the _sum/State of the remote edge.
 		 */
-		REMOTE_SUM_STATE(Doc.of(Level.values()) //
+		REMOTE_SUM_STATE(Doc.of(Level.values())//
 				.persistencePriority(PersistencePriority.HIGH)), //
 		REMOTE_SUM_STATE_FAULT(Doc.of(Level.FAULT)), //
 		REMOTE_SUM_STATE_WARNING(Doc.of(Level.WARNING)), //

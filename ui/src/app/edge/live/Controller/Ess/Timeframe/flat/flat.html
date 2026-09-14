@@ -5,11 +5,11 @@
     </oe-flat-widget-line>
 
     <ng-container *ngIf="propertyMode !== 'OFF'">
-      <oe-flat-widget-line [name]="'Edge.Index.Widgets.Timeframe.targetSoc' | translate" [value]="targetSoC ?? '-'"
+      <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.TIMEFRAME.TARGET_SOC' | translate" [value]="targetSoC ?? '-'"
                            [converter]="CONVERT_TO_PERCENT"></oe-flat-widget-line>
-      <oe-flat-widget-line [name]="'Edge.Index.Widgets.Timeframe.startTime' | translate"
+      <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.TIMEFRAME.START_TIME' | translate"
                            [value]="startTime"></oe-flat-widget-line>
-      <oe-flat-widget-line [name]="'Edge.Index.Widgets.Timeframe.endTime' | translate"
+      <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.TIMEFRAME.END_TIME' | translate"
                            [value]="endTime"></oe-flat-widget-line>
     </ng-container>
   </oe-flat-widget>

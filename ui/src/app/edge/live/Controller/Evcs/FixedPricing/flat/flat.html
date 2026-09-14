@@ -5,7 +5,7 @@
             [converter]="CONVERT_MANUAL_ON_OFF">
         </oe-flat-widget-line>
         <ng-container *ngIf="propertyMode === 'MANUAL_ON'">
-            <oe-flat-widget-line [name]="'General.currentPrice' | translate"
+            <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.CURRENT_PRICE' | translate"
                 [value]="currentPrice !== null ? (currentPrice | number:'1.2-4') + ' €/kWh' : '-'">
             </oe-flat-widget-line>
         </ng-container>

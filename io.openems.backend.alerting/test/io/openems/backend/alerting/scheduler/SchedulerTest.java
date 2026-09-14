@@ -7,36 +7,37 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-import com.google.gson.JsonObject;
 import io.openems.backend.alerting.Handler;
 import io.openems.backend.alerting.HandlerMetrics;
 import io.openems.backend.alerting.Message;
+import io.openems.backend.common.mail.MailContext;
 import io.openems.common.event.EventReader;
-import org.junit.BeforeClass;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import io.openems.backend.alerting.Dummy.TimeLeapMinuteTimer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class SchedulerTest {
+class SchedulerTest {
 
 	private static final Logger log = LoggerFactory.getLogger(SchedulerTest.class);
 
 	/**
 	 * Validate dummy methods.
 	 */
-	@BeforeClass
-	public static void dummyClass() {
+	@BeforeAll
+	static void dummyClass() {
 		var dummyMsg = new DummyMessage("", Instant.now(), 0);
 		var dummyHan = new DummyHandler();
-		Runnable[] methods = { () -> dummyHan.getEventHandler(null), dummyHan::stop, dummyMsg::getParams };
+		Runnable[] methods = { () -> dummyHan.getEventHandler(null), dummyHan::stop, dummyMsg::getContext };
 		assertNotNull(dummyMsg.getNotifyStamp());
 		for (var method : methods) {
 			assertThrows(UnsupportedOperationException.class, method::run);
@@ -44,7 +45,7 @@ public class SchedulerTest {
 	}
 
 	@Test
-	public void testSchedule() {
+	void testSchedule() {
 		/* Prepare */
 		final var now = Instant.now();
 		final var handler = new DummyHandler();
@@ -76,7 +77,7 @@ public class SchedulerTest {
 	}
 
 	@Test
-	public void testRemove() {
+	void testRemove() {
 		/* Prepare */
 		final var now = Instant.now();
 		final var handler = new DummyHandler();
@@ -115,7 +116,7 @@ public class SchedulerTest {
 	}
 
 	@Test
-	public void testUnRegister() {
+	void testUnRegister() {
 		/* Prepare */
 		final var now = Instant.now();
 		final var scheduler = new Scheduler(new TimeLeapMinuteTimer(now));
@@ -161,7 +162,7 @@ public class SchedulerTest {
 	}
 
 	@Test
-	public void testHandle() {
+	void testHandle() {
 		/* Prepare */
 		final var now = Instant.now();
 		final var timer = new TimeLeapMinuteTimer(now);
@@ -283,7 +284,7 @@ public class SchedulerTest {
 		}
 
 		@Override
-		public JsonObject getParams() {
+		public MailContext getContext() {
 			throw new UnsupportedOperationException();
 		}
 	}
@@ -321,6 +322,11 @@ public class SchedulerTest {
 		@Override
 		public HandlerMetrics getMetrics() {
 			return new HandlerMetrics(this.messagesSent.get(), -1);
+		}
+
+		@Override
+		public String debugLog() {
+			return String.format("[DummyHandler] messagesSent=%d", this.messagesSent.get());
 		}
 	}
 

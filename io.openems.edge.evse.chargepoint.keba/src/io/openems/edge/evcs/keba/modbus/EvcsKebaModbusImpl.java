@@ -2,6 +2,7 @@ package io.openems.edge.evcs.keba.modbus;
 
 import static io.openems.common.types.OpenemsType.INTEGER;
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.DIRECT_1_TO_1;
+import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_1;
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_3;
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_MINUS_1;
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_MINUS_3;
@@ -45,8 +46,6 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
-import io.openems.edge.common.channel.EnumReadChannel;
-import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.modbusslave.ModbusSlave;
@@ -60,7 +59,6 @@ import io.openems.edge.evcs.api.DeprecatedEvcs;
 import io.openems.edge.evcs.api.Evcs;
 import io.openems.edge.evcs.api.EvcsPower;
 import io.openems.edge.evcs.api.ManagedEvcs;
-import io.openems.edge.evcs.api.PhaseRotation;
 import io.openems.edge.evcs.api.Phases;
 import io.openems.edge.evcs.api.Status;
 import io.openems.edge.evcs.api.WriteHandler;
@@ -72,6 +70,7 @@ import io.openems.edge.evse.chargepoint.keba.common.KebaUtils;
 import io.openems.edge.evse.chargepoint.keba.common.ProductTypeAndFeatures;
 import io.openems.edge.evse.chargepoint.keba.modbus.KebaModbusUtils;
 import io.openems.edge.meter.api.ElectricityMeter;
+import io.openems.edge.meter.api.PhaseRotation;
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
 
@@ -117,7 +116,6 @@ public class EvcsKebaModbusImpl extends KebaModbus implements EvcsKeba, ManagedE
 	private final WriteHandler writeHandler = new WriteHandler(this);
 
 	private Instant lastWrite;
-	private boolean setEnableSet;
 
 	@Override
 	@Reference(policy = STATIC, policyOption = GREEDY, cardinality = MANDATORY)
@@ -168,7 +166,6 @@ public class EvcsKebaModbusImpl extends KebaModbus implements EvcsKeba, ManagedE
 		this._setChargingType(ChargingType.AC);
 		this._setFixedMinimumHardwarePower(this.getConfiguredMinimumHardwarePower());
 		this._setFixedMaximumHardwarePower(this.getConfiguredMaximumHardwarePower());
-		this.setEnableSet = false;
 	}
 
 	@Override
@@ -189,7 +186,7 @@ public class EvcsKebaModbusImpl extends KebaModbus implements EvcsKeba, ManagedE
 
 	@Override
 	public int getConfiguredMaximumHardwarePower() {
-		return Math.round(this.getMaxChargingCurrent().orElse(Evcs.DEFAULT_MAXIMUM_HARDWARE_CURRENT) / 1000f)
+		return Math.round(this.getMaxSupportedCurrent().orElse(Evcs.DEFAULT_MAXIMUM_HARDWARE_CURRENT) / 1000f)
 				* DEFAULT_VOLTAGE * Phases.THREE_PHASE.getValue();
 	}
 
@@ -214,19 +211,17 @@ public class EvcsKebaModbusImpl extends KebaModbus implements EvcsKeba, ManagedE
 		 * Limits the charging value because KEBA knows only values between 6000 and
 		 * 32000
 		 */
-		IntegerReadChannel maxHw = this.channel(EvcsKeba.ChannelId.MAX_HARDWARE_CURRENT);
+		var maxHw = this.getMaxSupportedCurrentChannel();
 		current = Math.min(current, maxHw.getNextValue().orElse(DEFAULT_MAXIMUM_HARDWARE_CURRENT));
 
 		if (current < 6000) {
 			current = 0;
 		}
-		this.setChargingCurrent(current);
+		this.kebaModbusUtils.setEnableOnCharge(current);
+		this.setSetChargingCurrent(current);
+
 		this.lastWrite = Instant.now(this.componentManager.getClock());
 		return true;
-	}
-
-	private void setChargingCurrent(int value) throws OpenemsNamedException {
-		this.setSetChargingCurrent(value);
 	}
 
 	@Override
@@ -257,7 +252,6 @@ public class EvcsKebaModbusImpl extends KebaModbus implements EvcsKeba, ManagedE
 			this.calculatePhases();
 			if (!this.isReadOnly()) {
 				this.writeHandler.run();
-				this.setEnableOnce();
 			}
 		}
 		}
@@ -279,23 +273,6 @@ public class EvcsKebaModbusImpl extends KebaModbus implements EvcsKeba, ManagedE
 	@Override
 	public void logDebug(String message) {
 		this.logDebug(this.log, message);
-	}
-
-	private void setEnableOnce() {
-		if (this.setEnableSet) {
-			return;
-		}
-		final var status = this.<EnumReadChannel>channel(Evcs.ChannelId.STATUS).getNextValue();
-		if (status.isDefined() ? status.get() == 2 : false) {
-			try {
-				this.setSetEnable(1);
-				this.setEnableSet = true;
-			} catch (OpenemsNamedException e) {
-				this.logDebug(
-						"A problem occurred while setting the EVCS KEBA P40 charging station 'Enable user' to 'enable'.");
-				e.printStackTrace();
-			}
-		}
 	}
 
 	@Override
@@ -371,9 +348,9 @@ public class EvcsKebaModbusImpl extends KebaModbus implements EvcsKeba, ManagedE
 				new FC3ReadRegistersTask(1046, Priority.LOW, //
 						m(Keba.ChannelId.POWER_FACTOR, new UnsignedDoublewordElement(1046), SCALE_FACTOR_MINUS_1)),
 				new FC3ReadRegistersTask(1100, Priority.LOW, //
-						m(KebaModbus.ChannelId.MAX_CHARGING_CURRENT, new UnsignedDoublewordElement(1100))),
+						m(Keba.ChannelId.MAX_CHARGING_CURRENT, new UnsignedDoublewordElement(1100))),
 				new FC3ReadRegistersTask(1110, Priority.LOW, //
-						m(EvcsKeba.ChannelId.MAX_HARDWARE_CURRENT, new UnsignedDoublewordElement(1110))),
+						m(Keba.ChannelId.MAX_SUPPORTED_CURRENT, new UnsignedDoublewordElement(1110))),
 				// todo: read Register 1500 RFID once solution is found
 				// this register is can not always be read with keba firmware 1.1.9 or less
 				// there is currently no way of knowing when it can be read
@@ -393,14 +370,14 @@ public class EvcsKebaModbusImpl extends KebaModbus implements EvcsKeba, ManagedE
 			modbusProtocol.addTasks(//
 					new FC6WriteRegisterTask(5004,
 							m(Keba.ChannelId.SET_CHARGING_CURRENT, new UnsignedWordElement(5004))),
-					new FC6WriteRegisterTask(5010, // TODO Scalefactor for Unit: 10 Wh
-							m(EvseKeba.ChannelId.SET_ENERGY_LIMIT, new UnsignedWordElement(5010))),
+					new FC6WriteRegisterTask(5010,
+							m(EvseKeba.ChannelId.SET_ENERGY_LIMIT, new UnsignedWordElement(5010), SCALE_FACTOR_1)),
 					new FC6WriteRegisterTask(5012, m(Keba.ChannelId.SET_UNLOCK_PLUG, new UnsignedWordElement(5012))),
 					new FC6WriteRegisterTask(5014, m(Keba.ChannelId.SET_ENABLE, new UnsignedWordElement(5014))),
 					new FC6WriteRegisterTask(5050,
 							m(Keba.ChannelId.SET_PHASE_SWITCH_SOURCE, new UnsignedWordElement(5050))),
 					new FC6WriteRegisterTask(5052,
-							m(Keba.ChannelId.SET_PHASE_SWITCH_STATE, new UnsignedWordElement(5052))));
+							m(Keba.ChannelId.SET_TRIGGER_PHASE_SWITCH, new UnsignedWordElement(5052))));
 		}
 
 		return modbusProtocol;

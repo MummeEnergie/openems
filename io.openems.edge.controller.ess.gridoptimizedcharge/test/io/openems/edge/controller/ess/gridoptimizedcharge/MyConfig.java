@@ -1,7 +1,6 @@
 package io.openems.edge.controller.ess.gridoptimizedcharge;
 
 import io.openems.common.test.AbstractComponentConfig;
-import io.openems.common.utils.ConfigUtils;
 import io.openems.edge.common.meta.GridFeedInLimitationType;
 import io.openems.edge.common.meta.Meta;
 
@@ -41,11 +40,6 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setMaximumSellToGridPower(int maximumSellToGridPower) {
-			this.meta._setMaximumGridFeedInLimit(maximumSellToGridPower);
-			return this;
-		}
-
 		public Builder setMode(Mode mode) {
 			this.mode = mode;
 			return this;
@@ -73,7 +67,6 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setGridFeedInLimitationType(GridFeedInLimitationType gridFeedInLimitationType) {
 			this.gridFeedInLimitationType = gridFeedInLimitationType;
-			this.meta._setGridFeedInLimitationType(this.gridFeedInLimitationType);
 			return this;
 		}
 
@@ -112,16 +105,6 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int maximumSellToGridPower() {
 		return this.builder.maximumSellToGridPower;
-	}
-
-	@Override
-	public String ess_target() {
-		return ConfigUtils.generateReferenceTargetFilter(this.id(), this.ess_id());
-	}
-
-	@Override
-	public String meter_target() {
-		return ConfigUtils.generateReferenceTargetFilter(this.id(), this.meter_id());
 	}
 
 	@Override

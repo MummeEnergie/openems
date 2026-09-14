@@ -1,5 +1,6 @@
 package io.openems.edge.kaco.blueplanet.hybrid10.ess;
 
+import static io.openems.edge.common.channel.ChannelUtils.setValue;
 import static io.openems.edge.common.type.Phase.SingleOrAllPhase.ALL;
 import static io.openems.edge.ess.power.api.Pwr.ACTIVE;
 import static io.openems.edge.ess.power.api.Pwr.REACTIVE;
@@ -10,13 +11,11 @@ import static org.osgi.service.component.annotations.ReferenceCardinality.MANDAT
 import static org.osgi.service.component.annotations.ReferencePolicy.STATIC;
 import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -30,6 +29,7 @@ import org.osgi.service.metatype.annotations.Designate;
 
 import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.common.types.ChannelAddress;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
@@ -61,6 +61,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 @EventTopics({ //
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE //
 })
+@GenerateTargetsFromReferences("core")
 public class KacoBlueplanetHybrid10EssImpl extends AbstractOpenemsComponent implements KacoBlueplanetHybrid10Ess,
 		HybridEss, ManagedSymmetricEss, SymmetricEss, OpenemsComponent, TimedataProvider, EventHandler, ModbusSlave {
 
@@ -76,14 +77,12 @@ public class KacoBlueplanetHybrid10EssImpl extends AbstractOpenemsComponent impl
 	private final CalculateEnergyFromPower calculateDcDischargeEnergy = new CalculateEnergyFromPower(this,
 			HybridEss.ChannelId.DC_DISCHARGE_ENERGY);
 
-	@Reference(policy = STATIC, policyOption = GREEDY, cardinality = MANDATORY)
+	@Reference(policy = STATIC, policyOption = GREEDY, cardinality = MANDATORY, //
+			target = "(&(id=${config.core_id})(enabled=true))")
 	private KacoBlueplanetHybrid10Core core;
 
 	@Reference
 	private Cycle cycle;
-
-	@Reference
-	private ConfigurationAdmin cm;
 
 	@Reference
 	private Timedata timedata;
@@ -105,19 +104,20 @@ public class KacoBlueplanetHybrid10EssImpl extends AbstractOpenemsComponent impl
 	}
 
 	@Activate
-	private void activate(ComponentContext context, Config config) throws IOException {
+	private void activate(ComponentContext context, Config config) {
 		super.activate(context, config.id(), config.alias(), config.enabled());
-		// update filter for 'datasource'
-		if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "core", config.core_id())) {
-			return;
-		}
 
 		this.config = config;
 		this._setCapacity(config.capacity());
 
 		// Set Max-Apparent-Power
 		this.timedata.getLatestValue(new ChannelAddress(config.id(), SymmetricEss.ChannelId.MAX_APPARENT_POWER.id()))
-				.thenAccept(latestValue -> {
+				.whenComplete((latestValue, throwable) -> {
+					if (throwable != null) {
+						this._setMaxApparentPower(MAX_POWER_RAMP); // start low
+						return;
+					}
+
 					Integer lastMaxApparentPower = TypeUtils.getAsType(OpenemsType.INTEGER, latestValue);
 					if (lastMaxApparentPower != null
 							&& lastMaxApparentPower != 10_000 /* throw away value that was previously fixed */) {
@@ -205,18 +205,16 @@ public class KacoBlueplanetHybrid10EssImpl extends AbstractOpenemsComponent impl
 		this._setActivePower(activePower);
 		this._setDcDischargePower(dcDischargePower);
 		this._setReactivePower(reactivePower);
-		this._setGridMode(gridMode);
+		setValue(this, SymmetricEss.ChannelId.GRID_MODE, gridMode);
 
-		if (soc == null || soc >= 99) {
-			this._setAllowedChargePower(0);
-		} else {
-			this._setAllowedChargePower(this.config.capacity() * -1);
-		}
-		if (soc == null || soc <= 0) {
-			this._setAllowedDischargePower(0);
-		} else {
-			this._setAllowedDischargePower(this.config.capacity());
-		}
+		setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER, //
+				soc == null || soc >= 99 //
+						? 0 //
+						: this.config.capacity() * -1);
+		setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_DISCHARGE_POWER, //
+				soc == null || soc <= 0 //
+						? 0 //
+						: this.config.capacity());
 
 		this.channel(KacoBlueplanetHybrid10Ess.ChannelId.BMS_VOLTAGE).setNextValue(bmsVoltage);
 		this.channel(KacoBlueplanetHybrid10Ess.ChannelId.RISO).setNextValue(riso);
@@ -366,8 +364,8 @@ public class KacoBlueplanetHybrid10EssImpl extends AbstractOpenemsComponent impl
 		}
 		// Apply Power-Ramp for version > 5
 		if (this.core.getVersionCom().orElse(0F) > 5F) {
-			float maxDelta = MAX_POWER_RAMP * this.cycle.getCycleTime() / 1000;
-			int activePower = this.getActivePower().orElse(0);
+			var maxDelta = Math.round(MAX_POWER_RAMP * this.cycle.getCycleTime() / 1000);
+			var activePower = this.getActivePower().orElse(0);
 			return new Constraint[] {
 					this.createPowerConstraint(MAX_POWER_RAMP + "W/sec Ramp", ALL, ACTIVE, LESS_OR_EQUALS,
 							activePower + maxDelta),

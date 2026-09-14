@@ -1,6 +1,9 @@
 package io.openems.edge.app.integratedsystem.fenecon.commercial;
 
 import static io.openems.edge.app.common.props.CommonProps.alias;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.isHardwareInstalledForMasterBox;
+import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.gridCode;
+import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.safetyCountry;
 
 import java.util.Map;
 import java.util.function.Function;
@@ -17,10 +20,9 @@ import com.google.gson.JsonElement;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.function.ThrowingTriFunction;
-import io.openems.common.oem.OpenemsEdgeOem;
 import io.openems.common.session.Language;
 import io.openems.common.session.Role;
-import io.openems.common.types.EdgeConfig;
+import io.openems.edge.app.enums.GridCode;
 import io.openems.edge.app.hardware.IoGpio;
 import io.openems.edge.app.integratedsystem.FeneconHomeComponents;
 import io.openems.edge.app.integratedsystem.fenecon.commercial.FeneconCommercial92ClusterSlave.Property;
@@ -29,7 +31,6 @@ import io.openems.edge.core.appmanager.AbstractOpenemsApp;
 import io.openems.edge.core.appmanager.AbstractOpenemsAppWithProps;
 import io.openems.edge.core.appmanager.AppConfiguration;
 import io.openems.edge.core.appmanager.AppDef;
-import io.openems.edge.core.appmanager.AppDescriptor;
 import io.openems.edge.core.appmanager.AppManagerUtil;
 import io.openems.edge.core.appmanager.ComponentUtil;
 import io.openems.edge.core.appmanager.ConfigurationTarget;
@@ -43,6 +44,7 @@ import io.openems.edge.core.appmanager.Type;
 import io.openems.edge.core.appmanager.Type.Parameter;
 import io.openems.edge.core.appmanager.Type.Parameter.BundleParameter;
 import io.openems.edge.core.appmanager.dependency.Tasks;
+import io.openems.edge.core.appmanager.dependency.aggregatetask.ComponentDef;
 
 @Component(name = "App.FENECON.Commercial.92.ClusterSlave")
 public class FeneconCommercial92ClusterSlave
@@ -52,6 +54,11 @@ public class FeneconCommercial92ClusterSlave
 	public enum Property implements Type<Property, FeneconCommercial92ClusterSlave, Parameter.BundleParameter> {
 		ALIAS(alias()), //
 
+		SAFETY_COUNTRY(AppDef.copyOfGeneric(safetyCountry(), def -> def//
+				.setRequired(true))), //
+
+		GRID_CODE(AppDef.copyOfGeneric(gridCode(), def -> def//
+				.setDefaultValue(GridCode.VDE_4105))), //
 		BATTERY_TARGET(FeneconCommercialProps.batteryStartStopTarget()), //
 		;
 
@@ -94,13 +101,6 @@ public class FeneconCommercial92ClusterSlave
 	}
 
 	@Override
-	public AppDescriptor getAppDescriptor(OpenemsEdgeOem oem) {
-		return AppDescriptor.create() //
-				.setWebsiteUrl(oem.getAppWebsiteUrl(this.getAppId())) //
-				.build();
-	}
-
-	@Override
 	public OpenemsAppCategory[] getCategories() {
 		return new OpenemsAppCategory[] { OpenemsAppCategory.INTEGRATED_SYSTEM };
 	}
@@ -131,17 +131,29 @@ public class FeneconCommercial92ClusterSlave
 			final var deviceHardware = this.appManagerUtil
 					.getFirstInstantiatedAppByCategories(OpenemsAppCategory.OPENEMS_DEVICE_HARDWARE);
 
-			final var components = Lists.<EdgeConfig.Component>newArrayList(//
-					FeneconHomeComponents.battery(bundle, batteryId, modbusToBatteryId, batteryTarget,
-							getIoId(this.appManagerUtil, deviceHardware) + "/DigitalOutput4"), //
-					FeneconCommercialComponents.batteryInverter(bundle, batteryInverterId, modbusToBatteryInverterId), //
-					FeneconHomeComponents.ess(bundle, essId, batteryId, batteryInverterId), //
-					FeneconHomeComponents.modbusInternal(bundle, t, modbusToBatteryId), //
-					FeneconCommercialComponents.modbusToBatteryInverter(bundle, t, modbusToBatteryInverterId) //
+			final var gridCode = this.getEnum(p, GridCode.class, Property.GRID_CODE).name();
+			final var dcMinVoltage = GridCode.VDE_4110.name().equals(gridCode) ? 653 : 650;
+			final var essProtection = GridCode.VDE_4110.name().equals(gridCode) //
+					? "RAMP"
+					: "VOLTAGE_REGULATION";
+
+			final var components = Lists.newArrayList(//
+					ComponentDef.from(FeneconHomeComponents.battery(bundle, batteryId, modbusToBatteryId, batteryTarget,
+							getIoId(this.appManagerUtil, deviceHardware) + "/DigitalOutput4")), //
+					FeneconCommercialComponents.batteryInverterWithForceErrorBehaviour(bundle, batteryInverterId,
+							modbusToBatteryInverterId, dcMinVoltage, gridCode), //
+					FeneconCommercialComponents.essWithForceEssFaultBehaviour(bundle, essId, batteryId,
+							batteryInverterId, essProtection), //
+					ComponentDef.from(
+							FeneconCommercialComponents.modbusToBatteryInverter(bundle, t, modbusToBatteryInverterId)) //
 			);
 
+			if (!isHardwareInstalledForMasterBox(deviceHardware)) {
+				components.add(ComponentDef.from(FeneconHomeComponents.io(bundle, modbusToBatteryId)));
+			}
+
 			return AppConfiguration.create() //
-					.addTask(Tasks.component(components)) //
+					.addTask(Tasks.componentFromComponentConfig(components)) //
 					.addTask(Tasks.staticIp(//
 							new InterfaceConfiguration("eth1") //
 									.addIp("BatteryInverter", "172.16.0.99/24"))) //

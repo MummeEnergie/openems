@@ -12,13 +12,13 @@ import java.time.ZoneId;
 import io.openems.common.OpenemsConstants;
 import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.Unit;
+import io.openems.common.jscalendar.JSCalendar;
 import io.openems.common.oem.OpenemsEdgeOem;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.EnumReadChannel;
-import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.currency.Currency;
 import io.openems.edge.common.meta.types.Coordinates;
@@ -76,7 +76,18 @@ public interface Meta extends ModbusSlave {
 		 * <li>Type: Boolean
 		 * </ul>
 		 */
-		IS_ESS_CHARGE_FROM_GRID_ALLOWED(Doc.of(BOOLEAN) //
+		IS_ESS_CHARGE_FROM_GRID_ALLOWED(Doc.of(BOOLEAN)//
+				.persistencePriority(HIGH)), //
+
+		/**
+		 * Is it allowed to discharge the ESS to Grid?.
+		 *
+		 * <ul>
+		 * <li>Interface: Meta
+		 * <li>Type: Boolean
+		 * </ul>
+		 */
+		IS_ESS_DISCHARGE_TO_GRID_ALLOWED(Doc.of(BOOLEAN)//
 				.persistencePriority(HIGH)), //
 
 		/**
@@ -87,11 +98,10 @@ public interface Meta extends ModbusSlave {
 		 * <li>Type: GridFeedInLimitationType
 		 * </ul>
 		 */
-		GRID_FEED_IN_LIMITATION_TYPE(Doc.of(GridFeedInLimitationType.values()) //
+		GRID_FEED_IN_LIMITATION_TYPE(Doc.of(GridFeedInLimitationType.values())//
 				.persistencePriority(HIGH)), //
-
 		/**
-		 * Maximum grid feed in limit.
+		 * Grid-Buy Soft-Limit.
 		 *
 		 * <ul>
 		 * <li>Interface: Meta
@@ -99,7 +109,7 @@ public interface Meta extends ModbusSlave {
 		 * <li>Unit: Watt
 		 * </ul>
 		 */
-		MAXIMUM_GRID_FEED_IN_LIMIT(Doc.of(OpenemsType.INTEGER) //
+		GRID_BUY_SOFT_LIMIT(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.WATT) //
 				.persistencePriority(HIGH)) //
 		;
@@ -159,15 +169,6 @@ public interface Meta extends ModbusSlave {
 	}
 
 	/**
-	 * Internal method to set the 'nextValue' on {@link ChannelId#CURRENCY} Channel.
-	 *
-	 * @param value the next value
-	 */
-	public default void _setCurrency(Currency value) {
-		this.getCurrencyChannel().setNextValue(value);
-	}
-
-	/**
 	 * Gets the Channel for {@link ChannelId#IS_ESS_CHARGE_FROM_GRID_ALLOWED}.
 	 *
 	 * @return the Channel
@@ -177,13 +178,22 @@ public interface Meta extends ModbusSlave {
 	}
 
 	/**
+	 * Gets the Channel for {@link ChannelId#IS_ESS_DISCHARGE_TO_GRID_ALLOWED}.
+	 *
+	 * @return the Channel
+	 */
+	public default BooleanReadChannel getIsEssDischargeToGridAllowedChannel() {
+		return this.channel(ChannelId.IS_ESS_DISCHARGE_TO_GRID_ALLOWED);
+	}
+
+	/**
 	 * Gets whether charging the ESS from grid is allowed. See
 	 * {@link ChannelId#GRID_FEED_IN_LIMITATION_TYPE}.
 	 *
 	 * @return the Channel {@link Value}
 	 */
-	public default Value<GridFeedInLimitationType> getGridFeedInLimitationType() {
-		return this.getGridFeedInLimitationTypeChannel().value();
+	public default GridFeedInLimitationType getGridFeedInLimitationType() {
+		return this.getGridFeedInLimitationTypeChannel().value().asEnum();
 	}
 
 	/**
@@ -193,16 +203,6 @@ public interface Meta extends ModbusSlave {
 	 */
 	public default Channel<GridFeedInLimitationType> getGridFeedInLimitationTypeChannel() {
 		return this.channel(ChannelId.GRID_FEED_IN_LIMITATION_TYPE);
-	}
-
-	/**
-	 * Internal method to set the 'nextValue' on
-	 * {@link ChannelId#GRID_FEED_IN_LIMITATION_TYPE} Channel.
-	 *
-	 * @param value the next value
-	 */
-	public default void _setGridFeedInLimitationType(GridFeedInLimitationType value) {
-		this.getGridFeedInLimitationTypeChannel().setNextValue(value);
 	}
 
 	/**
@@ -216,42 +216,13 @@ public interface Meta extends ModbusSlave {
 	}
 
 	/**
-	 * Internal method to set the 'nextValue' on
-	 * {@link ChannelId#IS_ESS_CHARGE_FROM_GRID_ALLOWED} Channel.
-	 *
-	 * @param value the next value
-	 */
-	public default void _setIsEssChargeFromGridAllowed(boolean value) {
-		this.getIsEssChargeFromGridAllowedChannel().setNextValue(value);
-	}
-
-	/**
-	 * Gets the Channel for {@link ChannelId#MAXIMUM_GRID_FEED_IN_LIMIT}.
-	 *
-	 * @return the Channel
-	 */
-	public default IntegerReadChannel getMaximumGridFeedInLimitChannel() {
-		return this.channel(ChannelId.MAXIMUM_GRID_FEED_IN_LIMIT);
-	}
-
-	/**
-	 * Gets the feed to grid power limit.
-	 * {@link ChannelId#MAXIMUM_GRID_FEED_IN_LIMIT}.
+	 * Gets whether discharging the ESS to grid is allowed. See
+	 * {@link ChannelId#IS_ESS_DISCHARGE_TO_GRID_ALLOWED}.
 	 *
 	 * @return the Channel {@link Value}
 	 */
-	public default int getMaximumGridFeedInLimit() {
-		return this.getMaximumGridFeedInLimitChannel().value().orElse(0);
-	}
-
-	/**
-	 * Internal method to set the 'nextValue' on
-	 * {@link ChannelId#MAXIMUM_GRID_FEED_IN_LIMIT} Channel.
-	 *
-	 * @param value the next value
-	 */
-	public default void _setMaximumGridFeedInLimit(int value) {
-		this.getMaximumGridFeedInLimitChannel().setNextValue(value);
+	public default boolean getIsEssDischargeToGridAllowed() {
+		return this.getIsEssDischargeToGridAllowedChannel().value().orElse(false);
 	}
 
 	/**
@@ -320,4 +291,66 @@ public interface Meta extends ModbusSlave {
 	 * @return the time zone, or null if not set
 	 */
 	public ZoneId getTimezone();
+
+	/**
+	 * Returns the continuous hard limit for Grid-Sell Power in [W].
+	 * 
+	 * <p>
+	 * This value is derived from GridConnectionPointFuseLimit.
+	 * 
+	 * @return the value
+	 */
+	public int getGridSellHardLimit();
+
+	/**
+	 * Returns the continuous hard limit for Grid-Sell Power in [W] minus a safety
+	 * buffer to reduce the risk of PV curtailment.
+	 *
+	 * <p>
+	 * This value is derived from GridConnectionPointFuseLimit.
+	 *
+	 * @return the value
+	 */
+	public int getGridSellHardLimitWithBuffer();
+
+	/**
+	 * Returns the continuous hard limit for Grid-Buy Power in [W].
+	 * 
+	 * <p>
+	 * This value is derived from GridConnectionPointFuseLimit and
+	 * {@link ChannelId#MAXIMUM_GRID_FEED_IN_LIMIT}.
+	 * 
+	 * @return the value
+	 */
+	public int getGridBuyHardLimit();
+
+	/**
+	 * Returns the continuous limit for ESS Discharge-to-Grid Power in [W].
+	 *
+	 * <p>
+	 * This value is derived from {@link ChannelId#IS_ESS_DISCHARGE_TO_GRID_ALLOWED}
+	 * and gridSellHardLimit()
+	 *
+	 * @return the value
+	 */
+	public int getEssDischargeToGridLimit();
+
+	/**
+	 * Returns the {@link GridBuySoftLimit} {@link JSCalendar.Tasks}.
+	 * 
+	 * <p>
+	 * A Schedule for Grid-Buy Soft-Limits. Controllers will try to achieve this
+	 * Soft-Limit, e.g. via Peak-Shaving with an ESS.
+	 * 
+	 * @return JSCalendar Tasks
+	 */
+	public JSCalendar.Tasks<GridBuySoftLimit> getGridBuySoftLimit();
+
+	/**
+	 * Returns whether the user has accepted, declined, or not yet decided on
+	 * third-party usage.
+	 *
+	 * @return the third party usage acceptance status
+	 */
+	public ThirdPartyUsageAcceptance getThirdPartyUsageAcceptance();
 }

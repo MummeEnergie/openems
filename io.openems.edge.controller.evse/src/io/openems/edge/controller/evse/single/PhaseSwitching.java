@@ -14,7 +14,14 @@ public enum PhaseSwitching {
 	 */
 	FORCE_THREE_PHASE, //
 	/**
-	 * Phase-Switching in AUTOMATIC mode. (not implemented!).
+	 * Phase-Switching automatically adapts based on mode:.
+	 * 
+	 * <ul>
+	 * <li>PV (SURPLUS): Switches between single and three phase depending on
+	 * available power.
+	 * <li>PV+Min (MINIMUM): Single phase if no PV surplus, otherwise like PV.
+	 * <li>Force Charge (FORCE): Three phase with max power.
+	 * </ul>
 	 */
-	AUTOMATIC_SWITCHING;
+	AUTOMATIC, //
 }

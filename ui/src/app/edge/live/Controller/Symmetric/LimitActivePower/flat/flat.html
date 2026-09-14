@@ -6,19 +6,19 @@
     </oe-flat-widget-line>
 
     <ng-container *ngIf="propertyMode === 'MANUAL_ON'">
-      <oe-flat-widget-line [name]="'Edge.Index.Widgets.LimitActivePower.chargeLimit' | translate"
+      <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.LIMIT_ACTIVE_POWER.CHARGE_LIMIT' | translate"
                            [channelAddress]="component.id + '/_PropertyMaxChargePower'"
                            [converter]="CONVERT_WATT_TO_KILOWATT"
       ></oe-flat-widget-line>
-      <oe-flat-widget-line [name]="'Edge.Index.Widgets.LimitActivePower.dischargeLimit' | translate"
+      <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.LIMIT_ACTIVE_POWER.DISCHARGE_LIMIT' | translate"
                            [channelAddress]="component.id + '/_PropertyMaxDischargePower'"
                            [converter]="CONVERT_WATT_TO_KILOWATT"
       ></oe-flat-widget-line>
-      <oe-flat-widget-line [name]="'Edge.Index.Widgets.LimitActivePower.startTime' | translate"
+      <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.LIMIT_ACTIVE_POWER.START_TIME' | translate"
                            [channelAddress]="component.id + '/_PropertyStartTime'"
                            [converter]="CONVERT_DATE"
       ></oe-flat-widget-line>
-      <oe-flat-widget-line [name]="'Edge.Index.Widgets.LimitActivePower.endTime' | translate"
+      <oe-flat-widget-line [name]="'CUSTOM_WIDGETS.LIMIT_ACTIVE_POWER.END_TIME' | translate"
                            [channelAddress]="component.id + '/_PropertyEndTime'"
                            [converter]="CONVERT_DATE"
       ></oe-flat-widget-line>

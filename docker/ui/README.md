@@ -1,7 +1,7 @@
-# OpenEMS UI (local build)
+# OpenEMS UI deployment
 
-- Built with Angular config `openems,openems-edge-docker`.
-- Runtime env `UI_WEBSOCKET` defines the websocket URL. In compose it's set to `ws://edge:8075`.
+- Runs published fork image via Docker Compose at `../docker-compose.yml`.
+- Runtime env `WEBSOCKET_HOST` and `WEBSOCKET_PORT` define websocket target.
 
 Run from the `docker` directory:
 
@@ -10,7 +10,3 @@ docker compose up -d
 ```
 
 Open `http://localhost/` in your browser.
-
-
-
-

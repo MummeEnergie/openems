@@ -1,5 +1,7 @@
 package io.openems.edge.ess.generic.common;
 
+import static io.openems.common.utils.IntUtils.maxInteger;
+import static io.openems.common.utils.IntUtils.minInteger;
 import static io.openems.edge.common.type.Phase.SingleOrAllPhase.ALL;
 import static io.openems.edge.ess.power.api.Pwr.ACTIVE;
 import static io.openems.edge.ess.power.api.Pwr.REACTIVE;
@@ -8,7 +10,6 @@ import static io.openems.edge.ess.power.api.Relationship.EQUALS;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.event.Event;
 import org.osgi.service.event.EventHandler;
@@ -39,7 +40,7 @@ import io.openems.edge.ess.power.api.Constraint;
  * Parent class for different implementations of Managed Energy Storage Systems,
  * consisting of a Battery-Inverter component and a Battery component.
  */
-public abstract class AbstractGenericManagedEss<ESS extends SymmetricEss & CycleProvider, BATTERY extends Battery, BATTERY_INVERTER extends ManagedSymmetricBatteryInverter>
+public abstract class AbstractGenericManagedEss<ESS extends SymmetricEss, BATTERY extends Battery, BATTERY_INVERTER extends ManagedSymmetricBatteryInverter>
 		extends AbstractOpenemsComponent implements GenericManagedEss, ManagedSymmetricEss, HybridEss, SymmetricEss,
 		OpenemsComponent, EventHandler, StartStoppable, ModbusSlave {
 
@@ -68,20 +69,10 @@ public abstract class AbstractGenericManagedEss<ESS extends SymmetricEss & Cycle
 		throw new IllegalArgumentException("Use the other activate() method!");
 	}
 
-	protected void activate(ComponentContext context, String id, String alias, boolean enabled, ConfigurationAdmin cm,
-			String batteryInverterId, String batteryId, StartStopConfig startStop) {
+	protected void activate(ComponentContext context, String id, String alias, boolean enabled,
+			StartStopConfig startStop) {
 		super.activate(context, id, alias, enabled);
 		this.startStopConfig = startStop;
-
-		// update filter for 'BatteryInverter'
-		if (OpenemsComponent.updateReferenceFilter(cm, this.servicePid(), "batteryInverter", batteryInverterId)) {
-			return;
-		}
-
-		// update filter for 'Battery'
-		if (OpenemsComponent.updateReferenceFilter(cm, this.servicePid(), "battery", batteryId)) {
-			return;
-		}
 
 		this.getChannelManager().activate(this.getComponentManager(), this.getBattery(), this.getBatteryInverter());
 	}
@@ -133,10 +124,10 @@ public abstract class AbstractGenericManagedEss<ESS extends SymmetricEss & Cycle
 		// minimum of MaxAllowedCharge/DischargePower and MaxApparentPower
 		sb //
 				.append("|Allowed:") //
-				.append(TypeUtils.max(//
+				.append(maxInteger(//
 						this.getAllowedChargePower().get(), TypeUtils.multiply(this.getMaxApparentPower().get(), -1)))
 				.append(";") //
-				.append(TypeUtils.min(//
+				.append(minInteger(//
 						this.getAllowedDischargePower().get(), this.getMaxApparentPower().get()));
 	}
 
@@ -173,8 +164,8 @@ public abstract class AbstractGenericManagedEss<ESS extends SymmetricEss & Cycle
 		var constraints = this.getBatteryInverter().getStaticConstraints();
 
 		for (var c : constraints) {
-			result.add(this.getPower().createSimpleConstraint(c.description, this, c.phase, c.pwr, c.relationship,
-					c.value));
+			result.add(this.getPower().createSimpleConstraint(c.description(), this, c.phase(), c.pwr(),
+					c.relationship(), c.value()));
 		}
 
 		// If the GenericEss is not in State "STARTED" block ACTIVE and REACTIVE Power!

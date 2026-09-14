@@ -1,32 +1,33 @@
 package io.openems.edge.evcs.keba.modbus;
 
 import static io.openems.common.test.TestUtils.createDummyClock;
-import static io.openems.edge.evcs.api.PhaseRotation.L2_L3_L1;
 import static io.openems.edge.evse.chargepoint.keba.common.CommonNaturesTest.testDeprecatedEvcsChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.CommonNaturesTest.testElectricityMeterChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.CommonNaturesTest.testEvcsChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.CommonNaturesTest.testManagedEvcsChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.EvcsKebaTest.testEvcsKebaChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.KebaModbusTest.prepareKebaModbus;
+import static io.openems.edge.evse.chargepoint.keba.common.KebaModbusTest.testEnergyLimitWriteScale;
 import static io.openems.edge.evse.chargepoint.keba.common.KebaModbusTest.testKebaModbusChannels;
 import static io.openems.edge.evse.chargepoint.keba.common.KebaTest.testKebaChannels;
+import static io.openems.edge.meter.api.PhaseRotation.L2_L3_L1;
 import static org.junit.Assert.assertEquals;
 
 import java.time.temporal.ChronoUnit;
 
 import org.junit.Test;
 
+import io.openems.common.test.DummyConfigurationAdmin;
 import io.openems.edge.bridge.modbus.test.DummyModbusBridge;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
 import io.openems.edge.common.test.DummyComponentManager;
-import io.openems.edge.common.test.DummyConfigurationAdmin;
 import io.openems.edge.evcs.api.Evcs;
 import io.openems.edge.evcs.api.ManagedEvcs;
-import io.openems.edge.evcs.api.PhaseRotation;
 import io.openems.edge.evcs.api.Phases;
 import io.openems.edge.evcs.test.DummyEvcsPower;
 import io.openems.edge.evse.chargepoint.keba.common.Keba;
+import io.openems.edge.meter.api.PhaseRotation;
 
 public class EvcsKebaModbusImplTest {
 
@@ -100,5 +101,25 @@ public class EvcsKebaModbusImplTest {
 				.deactivate();
 
 		assertEquals("L:5678 W|SetCurrent:UNDEFINED|SetEnable:-1:Undefined", sut.debugLog());
+	}
+
+	@Test
+	public void testEnergyLimitScaleFactor() throws Exception {
+		final var sut = new EvcsKebaModbusImpl();
+		new ComponentTest(sut) //
+				.addReference("evcsPower", new DummyEvcsPower()) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager(createDummyClock()))
+				.addReference("setModbus", new DummyModbusBridge("modbus0")) //
+				.activate(MyConfig.create() //
+						.setId("evcs0") //
+						.setDebugMode(false)//
+						.setMinHwCurrent(6000)//
+						.setPhaseRotation(PhaseRotation.L1_L2_L3) //
+						.setModbusId("modbus0") //
+						.setModbusUnitId(255) //
+						.setReadOnly(false) //
+						.build());
+		testEnergyLimitWriteScale(sut, 1000, 100);
 	}
 }

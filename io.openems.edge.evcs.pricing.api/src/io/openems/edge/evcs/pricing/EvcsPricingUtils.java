@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.OptionalDouble;
 
+import io.openems.edge.timeofusetariff.api.TimeOfUsePrices;
 import io.openems.edge.timeofusetariff.api.TimeOfUseTariff;
 
 /**
@@ -34,7 +35,7 @@ public final class EvcsPricingUtils {
 	 * <p>
 	 * Uses the next price-change timestamp from {@link EvcsPricing} when available,
 	 * but always guarantees at least one 15-minute quarter forward so that
-	 * {@code QuarterlyValues#getBetween} returns a non-empty stream.
+	 * {@code TimeOfUsePrices#getBetweenExclusive} returns a non-empty stream.
 	 *
 	 * @param nowRounded  the current time truncated to the nearest quarter-hour
 	 * @param evcsPricing the pricing core to query for the next price-change timestamp
@@ -74,8 +75,8 @@ public final class EvcsPricingUtils {
 			return OptionalDouble.empty();
 		}
 		var nextTick = resolveNextTick(nowRounded, evcsPricing);
-		var avgOpt = prices.getBetween(nowRounded, nextTick)
-				.mapToDouble(Double::doubleValue)
+		var avgOpt = prices.getBetweenExclusive(nowRounded, nextTick)
+				.mapToDouble(entry -> entry.getValue())
 				.average();
 		if (avgOpt.isEmpty()) {
 			return OptionalDouble.empty();

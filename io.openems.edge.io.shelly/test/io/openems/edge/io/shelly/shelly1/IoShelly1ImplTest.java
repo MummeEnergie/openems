@@ -1,12 +1,14 @@
 package io.openems.edge.io.shelly.shelly1;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import io.openems.edge.bridge.http.api.HttpError;
-import io.openems.edge.bridge.http.api.HttpResponse;
-import io.openems.edge.bridge.http.dummy.DummyBridgeHttpBundle;
+import io.openems.common.bridge.http.api.HttpError;
+import io.openems.common.bridge.http.api.HttpResponse;
+import io.openems.common.bridge.http.dummy.DummyBridgeHttpBundle;
+import io.openems.edge.bridge.http.cycle.HttpBridgeCycleServiceDefinition;
+import io.openems.edge.bridge.http.cycle.dummy.DummyCycleSubscriber;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
 
@@ -15,9 +17,12 @@ public class IoShelly1ImplTest {
 	@Test
 	public void test() throws Exception {
 		final var sut = new IoShelly1Impl();
-		final var httpTestBundle = new DummyBridgeHttpBundle();
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
+		final var dummyCycleSubscriber = new DummyCycleSubscriber();
 		new ComponentTest(sut) //
 				.addReference("httpBridgeFactory", httpTestBundle.factory()) //
+				.addReference("httpBridgeCycleServiceDefinition",
+						new HttpBridgeCycleServiceDefinition(dummyCycleSubscriber)) //
 				.activate(MyConfig.create() //
 						.setId("io0") //
 						.setIp("127.0.0.1") //
@@ -40,7 +45,7 @@ public class IoShelly1ImplTest {
 											]
 										}
 									"""));
-							httpTestBundle.triggerNextCycle();
+							dummyCycleSubscriber.triggerNextCycle();
 						}) //
 						.onAfterProcessImage(() -> assertEquals("x", sut.debugLog())) //
 
@@ -51,7 +56,7 @@ public class IoShelly1ImplTest {
 				.next(new TestCase("Invalid read response") //
 						.onBeforeProcessImage(() -> { //
 							httpTestBundle.forceNextFailedResult(HttpError.ResponseError.notFound());
-							httpTestBundle.triggerNextCycle();
+							dummyCycleSubscriber.triggerNextCycle();
 						}) //
 						.onAfterProcessImage(() -> assertEquals("?", sut.debugLog())) //
 

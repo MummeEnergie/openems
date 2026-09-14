@@ -5,24 +5,29 @@ import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.INVERT
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_1;
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_2;
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_MINUS_2;
+import static io.openems.edge.bridge.modbus.api.ModbusUtils.abortAfterNthErrors;
 import static io.openems.edge.bridge.modbus.api.ModbusUtils.readElementOnce;
+import static io.openems.edge.bridge.modbus.api.ModbusUtils.readElementsUntil;
+import static io.openems.edge.bridge.modbus.api.ModbusUtils.restartAfterChannelChange;
 import static io.openems.edge.bridge.modbus.api.ModbusUtils.FunctionCode.FC3;
 import static io.openems.edge.common.type.Phase.SingleOrAllPhase.L1;
 import static io.openems.edge.common.type.Phase.SingleOrAllPhase.L2;
 import static io.openems.edge.common.type.Phase.SingleOrAllPhase.L3;
 
+import static org.osgi.service.component.annotations.ReferenceCardinality.MANDATORY;
+import static org.osgi.service.component.annotations.ReferenceCardinality.OPTIONAL;
+import static org.osgi.service.component.annotations.ReferencePolicy.DYNAMIC;
+import static org.osgi.service.component.annotations.ReferencePolicy.STATIC;
+import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
+
 import java.util.function.Supplier;
 
-import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
-import org.osgi.service.component.annotations.ReferencePolicy;
-import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.event.Event;
 import org.osgi.service.event.EventHandler;
 import org.osgi.service.event.propertytypes.EventTopics;
@@ -33,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.common.types.MeterType;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
@@ -55,6 +61,7 @@ import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveNatureTable;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
+import io.openems.edge.common.serialnumber.SerialNumberStorage;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.common.type.Phase.SingleOrAllPhase;
 import io.openems.edge.common.type.TypeUtils;
@@ -76,6 +83,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE, //
 		EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
 })
+@GenerateTargetsFromReferences("Modbus")
 public class GoodWeGridMeterImpl extends AbstractOpenemsModbusComponent implements GoodWeGridMeter, ElectricityMeter,
 		ModbusComponent, OpenemsComponent, TimedataProvider, EventHandler, ModbusSlave {
 
@@ -87,17 +95,18 @@ public class GoodWeGridMeterImpl extends AbstractOpenemsModbusComponent implemen
 
 	private Config config;
 
-	@Reference
-	private ConfigurationAdmin cm;
-
 	@Override
-	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
+	@Reference(policy = STATIC, policyOption = GREEDY, cardinality = MANDATORY, //
+			target = "(&(id=${config.modbus_id})(enabled=true))")
 	protected void setModbus(BridgeModbus modbus) {
 		super.setModbus(modbus);
 	}
 
-	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
+	@Reference(policy = DYNAMIC, policyOption = GREEDY, cardinality = OPTIONAL)
 	private volatile Timedata timedata = null;
+
+	@Reference
+	private SerialNumberStorage serialNumberStorage;
 
 	public GoodWeGridMeterImpl() {
 		super(//
@@ -116,10 +125,8 @@ public class GoodWeGridMeterImpl extends AbstractOpenemsModbusComponent implemen
 	@Activate
 	private void activate(ComponentContext context, Config config) throws OpenemsException {
 		this.config = config;
-		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
-				"Modbus", config.modbus_id())) {
-			return;
-		}
+		this.serialNumberStorage.createAndAddOnChangeListener(this.channel(GoodWeGridMeter.ChannelId.SERIAL_NUMBER));
+		super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId());
 	}
 
 	@Override
@@ -137,6 +144,7 @@ public class GoodWeGridMeterImpl extends AbstractOpenemsModbusComponent implemen
 	@Override
 	protected ModbusProtocol defineModbusProtocol() {
 		var protocol = new ModbusProtocol(this, //
+
 				// States
 				new FC3ReadRegistersTask(36003, Priority.LOW,
 						m(new UnsignedWordElement(36003)).build().onUpdateCallback(this::convertMeterConnectStatus),
@@ -167,6 +175,11 @@ public class GoodWeGridMeterImpl extends AbstractOpenemsModbusComponent implemen
 						m(GoodWeGridMeter.ChannelId.P_GRID_T, new SignedDoublewordElement(35134),
 								this.ignoreZeroAndScaleFactorMinus2)) //
 		);
+
+		readElementsUntil(protocol, abortAfterNthErrors(5),
+				restartAfterChannelChange(this.getModbusCommunicationFailedChannel()),
+				executeStateConsumer -> new FC3ReadRegistersTask(executeStateConsumer, 33943, Priority.LOW,
+						m(GoodWeGridMeter.ChannelId.SERIAL_NUMBER, new StringWordElement(33943, 8))));
 
 		/*
 		 * Handle different GoodWe Types & versions.

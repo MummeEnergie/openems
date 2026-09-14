@@ -1,25 +1,25 @@
 <oe-modal [title]="this.component.alias" [component]="component" *ngIf="isInitialized">
 
-  <oe-modal-line [name]="'General.currentPrice' | translate"
+  <oe-modal-line [name]="'CUSTOM_WIDGETS.CURRENT_PRICE' | translate"
     [value]="currentPrice != null ? (currentPrice | number:'1.2-4') + ' €/kWh' : '-'">
   </oe-modal-line>
 
-  <oe-modal-line [name]="'Edge.Index.Widgets.EVCS.PricingDashboard.nextPrice' | translate"
+  <oe-modal-line [name]="'CUSTOM_WIDGETS.PRICING_DASHBOARD.NEXT_PRICE' | translate"
     [value]="nextPrice != null ? (nextPrice | number:'1.2-4') + ' €/kWh' : '-'">
   </oe-modal-line>
 
-  <oe-modal-line [name]="'Edge.Index.Widgets.EVCS.PricingDashboard.nextChange' | translate"
+  <oe-modal-line [name]="'CUSTOM_WIDGETS.PRICING_DASHBOARD.NEXT_CHANGE' | translate"
     [value]="formatNextChange()">
   </oe-modal-line>
 
   <ng-container *ngIf="overrideSource">
     <oe-modal-horizontal-line></oe-modal-horizontal-line>
 
-    <oe-modal-line [name]="'Edge.Index.Widgets.EVCS.PricingDashboard.overrideActive' | translate"
+    <oe-modal-line [name]="'CUSTOM_WIDGETS.PRICING_DASHBOARD.OVERRIDE_ACTIVE' | translate"
       [value]="overrideSource">
     </oe-modal-line>
 
-    <oe-modal-line [name]="'Edge.Index.Widgets.EVCS.PricingDashboard.overrideValue' | translate"
+    <oe-modal-line [name]="'CUSTOM_WIDGETS.PRICING_DASHBOARD.OVERRIDE_VALUE' | translate"
       [value]="overrideValue != null ? (overrideValue | number:'1.2-4') + ' €/kWh' : '-'">
     </oe-modal-line>
   </ng-container>
@@ -27,7 +27,7 @@
   <oe-modal-horizontal-line></oe-modal-horizontal-line>
 
   <h3 style="padding: 0 16px; margin: 8px 0;">
-    {{ 'Edge.Index.Widgets.EVCS.PricingDashboard.controllers' | translate }}
+    {{ 'CUSTOM_WIDGETS.PRICING_DASHBOARD.CONTROLLERS' | translate }}
   </h3>
 
   <ng-container *ngFor="let ctrl of controllers">
@@ -36,7 +36,7 @@
   </ng-container>
 
   <ng-container *ngIf="controllers.length === 0">
-    <oe-modal-info-line [info]="'Edge.Index.Widgets.EVCS.PricingDashboard.noControllers' | translate">
+    <oe-modal-info-line [info]="'CUSTOM_WIDGETS.PRICING_DASHBOARD.NO_CONTROLLERS' | translate">
     </oe-modal-info-line>
   </ng-container>
 

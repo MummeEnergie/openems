@@ -1,6 +1,6 @@
-# OpenEMS Edge (local build)
+# OpenEMS Edge deployment
 
-- Built locally via docker compose at `../docker-compose.yml`.
+- Runs published fork image via Docker Compose at `../docker-compose.yml`.
 - Config is persisted at `./conf` (mounted to `/var/opt/openems/config`).
   - If empty on first run, defaults are copied in by the container.
 - Data is persisted at `./data` (mounted to `/var/opt/openems/data`).
@@ -15,7 +15,3 @@ Run from the `docker` directory:
 ```bash
 docker compose up -d
 ```
-
-
-
-

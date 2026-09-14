@@ -27,6 +27,7 @@ import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.function.ThrowingBiFunction;
 import io.openems.common.function.ThrowingFunction;
 import io.openems.common.function.ThrowingTriFunction;
+import io.openems.common.oem.OpenemsEdgeOem;
 import io.openems.common.session.Language;
 import io.openems.common.types.EdgeConfig.Component;
 import io.openems.common.utils.JsonUtils;
@@ -191,7 +192,7 @@ public abstract class AbstractOpenemsApp<PROPERTY extends Nameable> //
 	}
 
 	/**
-	 * Gets the id of the map with the given default id
+	 * Gets the id of the map with the given default id.
 	 *
 	 * <p>
 	 * e. g. defaultId: "ess0" => the next available id with the base-name "ess" and
@@ -296,7 +297,8 @@ public abstract class AbstractOpenemsApp<PROPERTY extends Nameable> //
 			final JsonObject original //
 	) {
 		final var copy = original.deepCopy();
-		for (var prop : app.getProperties()) {
+		final var properties = app.getProperties();
+		for (var prop : properties) {
 			if (copy.has(prop.name)) {
 				continue;
 			}
@@ -304,6 +306,18 @@ public abstract class AbstractOpenemsApp<PROPERTY extends Nameable> //
 				continue;
 			}
 			var value = prop.bidirectionalValue.apply(copy);
+			if (value == null) {
+				continue;
+			}
+			// add value to configuration
+			copy.add(prop.name, value);
+		}
+
+		for (var prop : properties) {
+			if (prop.valueMapper == null) {
+				continue;
+			}
+			var value = prop.valueMapper.apply(copy);
 			if (value == null) {
 				continue;
 			}
@@ -376,22 +390,15 @@ public abstract class AbstractOpenemsApp<PROPERTY extends Nameable> //
 	 * @return the {@link ResourceBundle}
 	 */
 	public static ResourceBundle getTranslationBundle(Language language) {
-		if (language == null) {
-			language = Language.DEFAULT;
-		}
-		// TODO add language support
-		switch (language) {
-		case CZ:
-		case ES:
-		case FR:
-		case NL:
-			language = Language.EN;
-			break;
-		case DE:
-		case EN:
-			break;
-		}
-		return ResourceBundle.getBundle("io.openems.edge.core.appmanager.translation", language.getLocal());
+		final var availableLanguage = switch (language) {
+		// Language was not set -> fall back to default (currently GERMAN)
+		case null -> Language.DEFAULT;
+		// Translations are not available -> fall back to ENGLISH
+		case CS, ES, FR, NL, JA -> Language.EN;
+		case DE, EN -> language;
+		};
+
+		return ResourceBundle.getBundle("io.openems.edge.core.appmanager.translation", availableLanguage.getLocal());
 	}
 
 	/**
@@ -430,6 +437,13 @@ public abstract class AbstractOpenemsApp<PROPERTY extends Nameable> //
 	@Override
 	public boolean assertCanEdit(String prop, User user) {
 		return true;
+	}
+
+	@Override
+	public AppDescriptor getAppDescriptor(OpenemsEdgeOem oem, Language language) {
+		return AppDescriptor.create() //
+				.setWebsiteUrl(oem.getAppWebsiteUrl(this.getAppId(), language)) //
+				.build();
 	}
 
 	@Override

@@ -1,23 +1,28 @@
 // @ts-strict-ignore
-import { Component, Input } from "@angular/core";
+import { Component, Input, ChangeDetectionStrategy } from "@angular/core";
 import { JsonrpcResponseError } from "src/app/shared/jsonrpc/base";
 
 @Component({
     selector: "oe-history-data-error",
-    template: `
-    <ion-item lines="full" color="warning" *ngIf="type !== null">
-    <ion-icon size="large" slot="start" name="alert-circle-outline"></ion-icon>
-    <ion-label class="ion-text-wrap" style="text-align: center">
-        <ng-container [ngSwitch]="type">
-            <span *ngSwitchCase="'TOO_LONG'" [innerHTML]="'Edge.Index.Energymonitor.ERROR_TOO_LONG' | translate"></span>
-            <span *ngSwitchCase="'TEMPORARY'" translate>Edge.Index.Energymonitor.ERROR_TEMPORARY</span>
-        </ng-container>
-    </ion-label>
-</ion-item>`,
+    template: ` @if (type !== null) {
+        <ion-item lines="full" color="warning">
+            <ion-icon size="large" slot="start" name="oe-warning"></ion-icon>
+            <ion-label class="ion-text-wrap" style="text-align: center">
+                @switch (type) {
+                    @case ("TOO_LONG") {
+                        <span [innerHTML]="'EDGE.INDEX.ENERGYMONITOR.ERROR_TOO_LONG' | translate"></span>
+                    }
+                    @case ("TEMPORARY") {
+                        <span translate>EDGE.INDEX.ENERGYMONITOR.ERROR_TEMPORARY</span>
+                    }
+                }
+            </ion-label>
+        </ion-item>
+    }`,
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false,
 })
 export class HistoryDataErrorComponent {
-
     protected type: ErrorType;
 
     @Input()
@@ -33,6 +38,7 @@ function toType(response: JsonrpcResponseError | null): ErrorType {
     if (message === undefined) {
         return null;
     }
+
     switch (message) {
         case "Die Anzeige und der Export von Daten über einen längeren Zeitraum ist derzeit leider nicht möglich":
             return "TOO_LONG";

@@ -7,8 +7,8 @@ import static io.openems.common.utils.ReflectionUtils.setAttributeViaReflection;
 import static io.openems.common.utils.ReflectionUtils.setStaticAttributeViaReflection;
 import static io.openems.edge.common.test.DummyUser.DUMMY_ADMIN;
 import static java.util.stream.Collectors.joining;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -37,7 +37,9 @@ import com.google.gson.JsonPrimitive;
 import io.openems.common.OpenemsConstants;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.test.DummyConfigurationAdmin;
 import io.openems.common.types.EdgeConfig;
+import io.openems.common.utils.CancellationToken;
 import io.openems.common.utils.JsonUtils;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.host.DummyHost;
@@ -45,7 +47,6 @@ import io.openems.edge.common.host.Host;
 import io.openems.edge.common.test.ComponentTest;
 import io.openems.edge.common.test.DummyComponentContext;
 import io.openems.edge.common.test.DummyComponentManager;
-import io.openems.edge.common.test.DummyConfigurationAdmin;
 import io.openems.edge.common.test.DummyMeta;
 import io.openems.edge.common.user.User;
 import io.openems.edge.core.appmanager.DummyValidator.TestCheckable;
@@ -54,8 +55,12 @@ import io.openems.edge.core.appmanager.dependency.AppManagerAppHelper;
 import io.openems.edge.core.appmanager.dependency.DependencyUtil;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.ComponentAggregateTask;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.ComponentAggregateTaskImpl;
+import io.openems.edge.core.appmanager.dependency.aggregatetask.EnergySchedulerVersionAggregateTaskImpl;
+import io.openems.edge.core.appmanager.dependency.aggregatetask.EvseClusterTaskImpl;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.PersistencePredictorAggregateTask;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.PersistencePredictorAggregateTaskImpl;
+import io.openems.edge.core.appmanager.dependency.aggregatetask.PredictorManagerByCentralOrderAggregateTask;
+import io.openems.edge.core.appmanager.dependency.aggregatetask.PredictorManagerByCentralOrderAggregateTaskImpl;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.SchedulerAggregateTask;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.SchedulerAggregateTaskImpl;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.SchedulerByCentralOrderAggregateTask;
@@ -73,6 +78,7 @@ import io.openems.edge.core.appmanager.validator.Checkable;
 import io.openems.edge.core.appmanager.validator.CheckableFactory;
 import io.openems.edge.core.appmanager.validator.Validator;
 import io.openems.edge.core.appmanager.validator.ValidatorImpl;
+import io.openems.edge.predictor.api.manager.PredictorManager;
 
 public class AppManagerTestBundle {
 
@@ -81,7 +87,7 @@ public class AppManagerTestBundle {
 	public final ComponentUtil componentUtil;
 	public final Validator validator;
 	public final DummyHost host = new DummyHost();
-	public final DummyMeta meta = new DummyMeta("_meta");
+	public final DummyMeta meta = new DummyMeta();
 
 	public final DummyAppManagerAppHelper appHelper;
 	public final AppManagerImpl sut;
@@ -130,6 +136,13 @@ public class AppManagerTestBundle {
 							.add("properties", JsonUtils.buildJsonObject() //
 									.addProperty("enabled", true) //
 									.add("controllers.ids", JsonUtils.buildJsonArray() //
+											.build()) //
+									.build()) //
+							.build()) //
+					.add(PredictorManager.SINGLETON_COMPONENT_ID, JsonUtils.buildJsonObject() //
+							.addProperty("factoryId", PredictorManager.SINGLETON_SERVICE_PID) //
+							.add("properties", JsonUtils.buildJsonObject() //
+									.add("predictor.ids", JsonUtils.buildJsonArray() //
 											.build()) //
 									.build()) //
 							.build()) //
@@ -276,7 +289,7 @@ public class AppManagerTestBundle {
 	 * @throws Exception on error
 	 */
 	public void assertNoValidationErrors() throws Exception {
-		this.appValidateWorker.validateApps();
+		this.appValidateWorker.validateApps(new CancellationToken());
 
 		// should not have found defective Apps
 		if (!this.appValidateWorker.defectiveApps.isEmpty()) {
@@ -362,6 +375,21 @@ public class AppManagerTestBundle {
 	}
 
 	/**
+	 * Creates assertions for the given {@link AbstractOpenemsAppWithProps}.
+	 *
+	 * @param <APP>       the app type
+	 * @param <PROPERTY>  the property type
+	 * @param <PARAMETER> the parameter type
+	 * @param app         the app under test
+	 * @return the app assertions
+	 */
+	public <APP extends AbstractOpenemsAppWithProps<APP, PROPERTY, PARAMETER>, //
+			PROPERTY extends Type<PROPERTY, APP, PARAMETER>, //
+			PARAMETER> AppAssertions<APP, PROPERTY, PARAMETER> withApp(APP app) {
+		return new AppAssertions<>(app);
+	}
+
+	/**
 	 * Adds a {@link ComponentAggregateTask} to the current active tasks.
 	 * 
 	 * @return the created {@link ComponentAggregateTask}
@@ -422,6 +450,41 @@ public class AppManagerTestBundle {
 				this.componentManger);
 		this.appHelper.addAggregateTask(persistencePredictorAggregateTaskImpl);
 		return persistencePredictorAggregateTaskImpl;
+	}
+
+	/**
+	 * Adds a {@link PersistencePredictorAggregateTask} to the current active tasks.
+	 *
+	 * @return the created {@link PersistencePredictorAggregateTask}
+	 */
+	public PredictorManagerByCentralOrderAggregateTask addPredictorManagerByCentralOrderAggregateTask() {
+		final var persistencePredictorAggregateTaskImpl = new PredictorManagerByCentralOrderAggregateTaskImpl(
+				this.componentManger, this.appManagerUtil);
+		this.appHelper.addAggregateTask(persistencePredictorAggregateTaskImpl);
+		return persistencePredictorAggregateTaskImpl;
+	}
+
+	/**
+	 * Adds a {@link EvseClusterTaskImpl} to the current active tasks.
+	 *
+	 * @return the created {@link EvseClusterTaskImpl}
+	 */
+	public EvseClusterTaskImpl addEvseAggregateTask() {
+		final var clusterTask = new EvseClusterTaskImpl(this.componentManger);
+		this.appHelper.addAggregateTask(clusterTask);
+		return clusterTask;
+	}
+
+	/**
+	 * Adds a {@link EnergySchedulerVersionAggregateTaskImpl} to the current active
+	 * tasks.
+	 *
+	 * @return the created {@link EnergySchedulerVersionAggregateTaskImpl}
+	 */
+	public EnergySchedulerVersionAggregateTaskImpl addEnergySchedulerVersionAggregateTask() {
+		final var task = new EnergySchedulerVersionAggregateTaskImpl(this.componentManger);
+		this.appHelper.addAggregateTask(task);
+		return task;
 	}
 
 	/**
@@ -684,6 +747,17 @@ public class AppManagerTestBundle {
 	public AddAppInstance.Response tryInstallWithMinConfig(OpenemsApp app) throws OpenemsNamedException {
 		return this.sut.handleAddAppInstanceRequest(DUMMY_ADMIN,
 				new AddAppInstance.Request(app.getAppId(), "key", "alias", Apps.getMinConfig(app.getAppId())));
+	}
+
+	/**
+	 * Creates fluent permission assertions for the given app.
+	 *
+	 * @param app        the app under test
+	 * @param properties valid properties to install the app with
+	 * @return the {@link AppPermissionAssertions}
+	 */
+	public AppPermissionAssertions assertPermissions(OpenemsApp app, JsonObject properties) {
+		return new AppPermissionAssertions(this, app, properties);
 	}
 
 }

@@ -1,25 +1,27 @@
 package io.openems.edge.controller.ess.timeframe;
 
-import io.openems.common.exceptions.InvalidValueException;
-import io.openems.edge.ess.test.DummyManagedSymmetricEss;
-import org.junit.Test;
-
-import io.openems.common.exceptions.OpenemsException;
-import io.openems.edge.common.test.DummyConfigurationAdmin;
-import io.openems.edge.controller.test.ControllerTest;
-import io.openems.edge.ess.power.api.Phase;
-import io.openems.edge.ess.power.api.Relationship;
-import io.openems.edge.ess.test.DummyManagedAsymmetricEss;
+import static io.openems.edge.common.test.TestUtils.withValue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.TimeZone;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import org.junit.Test;
 
+import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.exceptions.InvalidValueException;
+import io.openems.common.test.DummyConfigurationAdmin;
+import io.openems.edge.common.sum.DummySum;
+import io.openems.edge.common.sum.Sum;
+import io.openems.edge.common.type.Phase.SingleOrAllPhase;
+import io.openems.edge.controller.test.ControllerTest;
+import io.openems.edge.ess.power.api.Relationship;
+import io.openems.edge.ess.test.DummyManagedAsymmetricEss;
+import io.openems.edge.ess.test.DummyManagedSymmetricEss;
 
 public class ControllerEssTimeframeImplTest {
 
@@ -32,6 +34,7 @@ public class ControllerEssTimeframeImplTest {
         new ControllerTest(new ControllerEssTimeframeImpl()) //
                 .addReference("cm", new DummyConfigurationAdmin()) //
                 .addReference("ess", ess) //
+                .addReference("sum", new DummySum()) //
                 .activate(MyConfig.create() //
                         .setId(CTRL_ID) //
                         .setEssId(ESS_ID) //
@@ -39,7 +42,7 @@ public class ControllerEssTimeframeImplTest {
                         .setStartTime("2021-01-01T00:00:00Z") //
                         .setEndTime("2021-01-01T01:00:00Z") //
                         .setTargetSoC(50) //
-                        .setPhase(Phase.ALL) //
+                        .setPhase(SingleOrAllPhase.ALL) //
                         .setRelationship(Relationship.EQUALS) //
                         .build()); //
     }
@@ -49,6 +52,7 @@ public class ControllerEssTimeframeImplTest {
         new ControllerTest(new ControllerEssTimeframeImpl()) //
                 .addReference("cm", new DummyConfigurationAdmin()) //
                 .addReference("ess", new DummyManagedAsymmetricEss(ESS_ID)) //
+                .addReference("sum", new DummySum()) //
                 .activate(MyConfig.create() //
                         .setId(CTRL_ID) //
                         .setEssId(ESS_ID) //
@@ -56,7 +60,7 @@ public class ControllerEssTimeframeImplTest {
                         .setStartTime("2021-01-01T00:00:00Z") //
                         .setEndTime("2021-01-01T01:00:00Z") //
                         .setTargetSoC(50) //
-                        .setPhase(Phase.ALL) //
+                        .setPhase(SingleOrAllPhase.ALL) //
                         .setRelationship(Relationship.EQUALS) //
                         .build()); //
     }
@@ -138,6 +142,21 @@ public class ControllerEssTimeframeImplTest {
         assertTrue(acPower > 1000);
 
     }
+
+	@Test
+	public void testLimitBuyFromGridPower() throws InvalidValueException {
+		var ess = new DummyManagedSymmetricEss(ESS_ID) //
+				.withCapacity(10_000) //
+				.withSoc(25) //
+				.withActivePower(0) //
+				.withMaxApparentPower(10_000);
+		var sum = new DummySum().withEssActivePower(0);
+		withValue(sum, Sum.ChannelId.CONSUMPTION_ACTIVE_POWER, 3_000);
+		withValue(sum, Sum.ChannelId.PRODUCTION_ACTIVE_POWER, 1_000);
+
+		assertEquals(Integer.valueOf(1_000), ControllerEssTimeframeImpl.getAcPower(ess, sum, 0, 50, 0, 0, 1_000,
+				this.getIso8601String(this.now()), this.getIso8601String(this.inOneHour())));
+	}
 
 
     private Date now() {
