@@ -20,6 +20,7 @@ public class ControllerEssPeakShavingImplTest {
 		new ControllerTest(new ControllerEssPeakShavingImpl()) //
 				.addReference("componentManager", new DummyComponentManager()) //
 				.addComponent(new DummyManagedSymmetricEss("ess0") //
+						.withSoc(50) //
 						.setPower(new DummyPower(0.3, 0.3, 0.1))) //
 				.addComponent(new DummyElectricityMeter("meter0")) //
 				.activate(MyConfig.create() //

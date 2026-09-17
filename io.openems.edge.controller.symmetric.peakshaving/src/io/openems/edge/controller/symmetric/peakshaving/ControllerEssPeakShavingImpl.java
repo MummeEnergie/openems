@@ -1,5 +1,8 @@
 package io.openems.edge.controller.symmetric.peakshaving;
 
+import static io.openems.edge.common.type.Phase.SingleOrAllPhase.ALL;
+import static io.openems.edge.ess.power.api.Pwr.ACTIVE;
+
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -14,6 +17,7 @@ import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.meter.api.ElectricityMeter;
@@ -46,8 +50,13 @@ public class ControllerEssPeakShavingImpl extends AbstractOpenemsComponent
 
     @Activate
     private void activate(ComponentContext context, Config config) {
+        if (config.limitOnly() && (config.socInfimum() < 0 || config.socSupremum() > 100
+                || config.socInfimum() >= config.socSupremum())) {
+            throw new IllegalArgumentException("Limit-only mode requires 0 <= socInfimum < socSupremum <= 100");
+        }
         super.activate(context, config.id(), config.alias(), config.enabled());
         this.config = config;
+        this.channel(ControllerEssPeakShaving.ChannelId.LIMIT_UNFULFILLABLE).setNextValue(false);
     }
 
     @Override
@@ -59,6 +68,10 @@ public class ControllerEssPeakShavingImpl extends AbstractOpenemsComponent
     @Override
     public void run() throws OpenemsNamedException {
         ManagedSymmetricEss ess = this.componentManager.getComponent(this.config.ess_id());
+        if (this.config.limitOnly()) {
+            this.runLimitOnly(ess);
+            return;
+        }
         /*
          * Check that the SoC is in the defined range
          */
@@ -103,5 +116,43 @@ public class ControllerEssPeakShavingImpl extends AbstractOpenemsComponent
         }
         ess.setActivePowerEqualsWithPid(calculatedPower);
         ess.setReactivePowerEquals(0);
+    }
+
+    private void runLimitOnly(ManagedSymmetricEss ess) throws OpenemsNamedException {
+        var inputUnavailable = true;
+        var limitUnfulfillable = false;
+        try {
+            if (ess.getGridMode() == GridMode.OFF_GRID) {
+                inputUnavailable = false;
+                return;
+            }
+            if (ess.getGridMode() != GridMode.ON_GRID) {
+                return;
+            }
+
+            ElectricityMeter meter = this.componentManager.getComponent(this.config.meter_id());
+            var soc = ess.getSoc().getOrError();
+            // Read all measurements before setting any constraints. Never substitute zero.
+            final long basePower = (long) meter.getActivePower().getOrError() + ess.getActivePower().getOrError();
+            inputUnavailable = false;
+
+            // Protect only the prohibited direction; preceding protection still has priority.
+            if (soc <= this.config.socInfimum()) {
+                ess.setActivePowerLessOrEquals(0);
+            }
+            if (soc >= this.config.socSupremum()) {
+                ess.setActivePowerGreaterOrEquals(0);
+            }
+
+            var minimumPower = basePower - this.config.peakShavingPower();
+            var maximumPower = ess.getPower().getMaxPower(ess, ALL, ACTIVE);
+            limitUnfulfillable = minimumPower > maximumPower;
+            // Clip explicitly to avoid repeating the power API's adjustment log each cycle.
+            // Do not filter or clamp the lower bound to zero: negative bounds allow charging.
+            ess.setActivePowerGreaterOrEquals((int) Math.max(Integer.MIN_VALUE, Math.min(minimumPower, maximumPower)));
+        } finally {
+            this.channel(ControllerEssPeakShaving.ChannelId.INPUT_UNAVAILABLE).setNextValue(inputUnavailable);
+            this.channel(ControllerEssPeakShaving.ChannelId.LIMIT_UNFULFILLABLE).setNextValue(limitUnfulfillable);
+        }
     }
 }
