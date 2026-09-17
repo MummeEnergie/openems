@@ -1,7 +1,7 @@
 package io.openems.edge.controller.ess.timeframe;
 
 import io.openems.common.test.AbstractComponentConfig;
-import io.openems.edge.ess.power.api.Phase;
+import io.openems.edge.common.type.Phase.SingleOrAllPhase;
 import io.openems.edge.ess.power.api.Relationship;
 
 @SuppressWarnings("all")
@@ -11,13 +11,14 @@ public class MyConfig extends AbstractComponentConfig implements Config {
         private String id;
         private String essId;
         private Mode mode;
-        private Phase phase;
+        private SingleOrAllPhase phase;
         private Relationship relationship;
 
         private int essCapacity;
         private int targetSoC;
         private int maxChargePower;
         private int maxDischargePower;
+        private int maxBuyFromGridPower;
         private String startTime;
         private String endTime;
 
@@ -39,7 +40,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
             return this;
         }
 
-        public Builder setPhase(Phase phase) {
+        public Builder setPhase(SingleOrAllPhase phase) {
             this.phase = phase;
             return this;
         }
@@ -74,6 +75,10 @@ public class MyConfig extends AbstractComponentConfig implements Config {
             return this;
         }
 
+        public Builder setMaxBuyFromGridPower(int maxBuyFromGridPower) {
+            this.maxBuyFromGridPower = maxBuyFromGridPower;
+            return this;
+        }
 
         public Builder setEndTime(String endTime) {
             this.endTime = endTime;
@@ -127,6 +132,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
+	public int maxBuyFromGridPower() {
+		return this.builder.maxBuyFromGridPower;
+	}
+
+	@Override
     public String startTime() {
         return this.builder.startTime;
     }
@@ -148,7 +158,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
     }
 
     @Override
-    public Phase phase() {
+    public SingleOrAllPhase phase() {
         return this.builder.phase;
     }
 

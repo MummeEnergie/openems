@@ -12,28 +12,12 @@ import {ModalComponent} from "../modal/modal";
 })
 export class FlatComponent extends AbstractFlatWidget {
 
-  protected override getChannelAddresses(): ChannelAddress[] {
-    return [
-      new ChannelAddress(this.component.id, "_PropertyMode"),
-      new ChannelAddress(this.component.id, "_PropertyStartTime"),
-      new ChannelAddress(this.component.id, "_PropertyEndTime"),
-      new ChannelAddress(this.component.id, "_PropertyMaxChargePower"),
-      new ChannelAddress(this.component.id, "_PropertyMaxDischargePower"),
-      new ChannelAddress(this.component.id, "_PropertyUiEnabled"),
-    ];
-  }
-
   public propertyMode: string;
   public uiEnabled: boolean;
 
   public readonly CONVERT_MANUAL_ON_OFF = Utils.CONVERT_MANUAL_ON_OFF(this.translate);
   public readonly CONVERT_WATT_TO_KILOWATT = Utils.CONVERT_WATT_TO_KILOWATT;
   public readonly CONVERT_DATE = Utils.CONVERT_DATE;
-
-  protected override onCurrentData(currentData: CurrentData) {
-    this.propertyMode = currentData.allComponents[this.component.id + "/_PropertyMode"];
-    this.uiEnabled = currentData.allComponents[this.component.id + "/_PropertyUiEnabled"];
-  }
 
   async presentModal() {
     if (!this.isInitialized) {
@@ -47,4 +31,21 @@ export class FlatComponent extends AbstractFlatWidget {
     });
     return await modal.present();
   }
+
+  protected override getChannelAddresses(): ChannelAddress[] {
+    return [
+      new ChannelAddress(this.component.id, "_PropertyMode"),
+      new ChannelAddress(this.component.id, "_PropertyStartTime"),
+      new ChannelAddress(this.component.id, "_PropertyEndTime"),
+      new ChannelAddress(this.component.id, "_PropertyMaxChargePower"),
+      new ChannelAddress(this.component.id, "_PropertyMaxDischargePower"),
+      new ChannelAddress(this.component.id, "_PropertyUiEnabled"),
+    ];
+  }
+
+  protected override onCurrentData(currentData: CurrentData) {
+    this.propertyMode = currentData.allComponents[this.component.id + "/_PropertyMode"];
+    this.uiEnabled = currentData.allComponents[this.component.id + "/_PropertyUiEnabled"];
+  }
+
 }

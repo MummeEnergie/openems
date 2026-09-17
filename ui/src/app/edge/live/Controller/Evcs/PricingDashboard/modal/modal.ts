@@ -2,7 +2,6 @@
 import { Component, OnInit } from "@angular/core";
 import { AbstractModal } from "src/app/shared/components/modal/abstractModal";
 import { ChannelAddress, CurrentData } from "src/app/shared/shared";
-import { EdgeConfig } from "src/app/shared/components/edge/edgeconfig";
 
 interface ControllerInfo {
   componentId: string;
@@ -34,6 +33,34 @@ export class ModalComponent extends AbstractModal implements OnInit {
   public controllers: ControllerInfo[] = [];
 
   private pricingControllerIds: string[] = [];
+
+  public formatNextChange(): string {
+    if (this.nextPriceChange == null) {
+      return "-";
+    }
+    return new Date(this.nextPriceChange).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  public getConstraintType(ctrl: ControllerInfo): string {
+    if (ctrl.override != null) {
+      return "Override";
+    }
+    if (ctrl.ceiling != null) {
+      return "Ceiling";
+    }
+    if (ctrl.floor != null) {
+      return "Floor";
+    }
+    return "Inactive";
+  }
+
+  public getConstraintValue(ctrl: ControllerInfo): string {
+    const value = ctrl.override ?? ctrl.ceiling ?? ctrl.floor;
+    if (value == null) {
+      return "-";
+    }
+    return value.toFixed(4) + " €/kWh";
+  }
 
   protected override getChannelAddresses(): ChannelAddress[] {
     const addresses: ChannelAddress[] = [
@@ -88,31 +115,4 @@ export class ModalComponent extends AbstractModal implements OnInit {
     }
   }
 
-  public formatNextChange(): string {
-    if (this.nextPriceChange == null) {
-      return "-";
-    }
-    return new Date(this.nextPriceChange).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-
-  public getConstraintType(ctrl: ControllerInfo): string {
-    if (ctrl.override != null) {
-      return "Override";
-    }
-    if (ctrl.ceiling != null) {
-      return "Ceiling";
-    }
-    if (ctrl.floor != null) {
-      return "Floor";
-    }
-    return "Inactive";
-  }
-
-  public getConstraintValue(ctrl: ControllerInfo): string {
-    const value = ctrl.override ?? ctrl.ceiling ?? ctrl.floor;
-    if (value == null) {
-      return "-";
-    }
-    return value.toFixed(4) + " €/kWh";
-  }
 }

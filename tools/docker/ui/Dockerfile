@@ -20,7 +20,7 @@ RUN find /opt -type f -print0 | xargs -0 dos2unix
 WORKDIR /src
 
 RUN patch src/index.html < /opt/index.patch && \
-    npm install && \
+    npm ci && \
     node_modules/.bin/ng build -c "$VERSION";
 
 ### Build ui base

@@ -47,7 +47,13 @@ subprojects {
 		failOnNoDiscoveredTests = false
 		reports {
 			html.required = false
-			junitXml.required = false
+			junitXml.required = true
+		}
+		testLogging {
+			warn {
+				events 'failed'
+				exceptionFormat = 'full'
+			}
 		}
 	}
 	

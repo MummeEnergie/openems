@@ -67,6 +67,8 @@ public class PidFilterTest {
 	public void testLimits() {
 		var p = new PidFilter(0.3, 0.3, 0);
 		p.setLimits(-10000, 10000);
+		// The fork caps the accumulated error at twice the output limit. With I=0.3,
+		// the integral contribution saturates at 6000, even before the output limit.
 		this.t(p, 0, 0, 0);
 		this.t(p, 0, 0, 0);
 		this.t(p, 0, 0, 0);
@@ -80,16 +82,16 @@ public class PidFilterTest {
 		this.t(p, 0, 10000, 3000);
 		this.t(p, 0, 10000, 6000);
 		this.t(p, 1896, 10000, 8431);
-		this.t(p, 4490, 10000, 10000);
-		this.t(p, 6981, 10000, 10000);
-		this.t(p, 8889, 10000, 10000);
-		this.t(p, 9591, 10000, 10000);
-		this.t(p, 9850, 10000, 10000);
-		this.t(p, 9945, 10000, 10000);
-		this.t(p, 9980, 10000, 10000);
-		this.t(p, 9993, 10000, 10000);
-		this.t(p, 9997, 10000, 10000);
-		this.t(p, 9999, 10000, 10000);
+		this.t(p, 4490, 10000, 7653);
+		this.t(p, 6981, 10000, 6906);
+		this.t(p, 8889, 10000, 6333);
+		this.t(p, 9591, 10000, 6123);
+		this.t(p, 9850, 10000, 6045);
+		this.t(p, 9945, 10000, 6017);
+		this.t(p, 9980, 10000, 6006);
+		this.t(p, 9993, 10000, 6002);
+		this.t(p, 9997, 10000, 6001);
+		this.t(p, 9999, 10000, 6000);
 		this.t(p, 10000, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
@@ -106,6 +108,14 @@ public class PidFilterTest {
 		this.t(p, 10000, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
+	}
+
+	@Test
+	public void testOutputLimits() {
+		var p = new PidFilter(1, 0, 0);
+		p.setLimits(-10000, 10000);
+		this.t(p, -10000, 10000, 10000);
+		this.t(p, 10000, -10000, -10000);
 	}
 
 	/**

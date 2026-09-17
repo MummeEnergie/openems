@@ -46,4 +46,4 @@ run = "./gradlew resolve"
 
 [tasks."start:remote-edge"]
 description = "Start remote Edge via Docker Compose"
-run = "docker-compose -f tools/docker/edge/docker-compose.yml up --force-recreate -d"
+run = "docker compose -f docker/docker-compose.yml up -d"

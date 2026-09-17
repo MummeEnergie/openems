@@ -31,6 +31,13 @@ export class FlatComponent extends AbstractFlatWidget {
     return await modal.present();
   }
 
+  public formatNextChange(): string {
+    if (this.nextPriceChange == null) {
+      return "-";
+    }
+    return new Date(this.nextPriceChange).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   protected override getChannelAddresses(): ChannelAddress[] {
     return [
       new ChannelAddress(FlatComponent.EVCS_PRICING_ID, "Price"),
@@ -48,10 +55,4 @@ export class FlatComponent extends AbstractFlatWidget {
     this.overrideSource = currentData.allComponents[prefix + "ActiveOverrideSource"];
   }
 
-  public formatNextChange(): string {
-    if (this.nextPriceChange == null) {
-      return "-";
-    }
-    return new Date(this.nextPriceChange).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
 }

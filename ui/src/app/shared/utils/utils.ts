@@ -307,12 +307,12 @@ export class Utils {
    * @returns converted value
    */
   public static CONVERT_DATE = (value?: Date | number | string): string => {
-    if (!value ||(typeof value === 'string' && !value.trim())) {
-      return '-';
+    if (!value ||(typeof value === "string" && !value.trim())) {
+      return "-";
     }
 
     const date = new Date(value);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    return date.toLocaleDateString() + " " + date.toLocaleTimeString();
   };
 
   /**
@@ -384,14 +384,14 @@ export class Utils {
    */
   public static CONVERT_MANUAL_AUTO_OFF = (translate: TranslateService) => {
     return (value: DefaultTypes.ManualOffAuto): string => {
-      if (value === 'MANUAL') {
-        return translate.instant('General.manually');
-      } else if (value === 'OFF') {
-        return translate.instant('General.off');
-      } else if (value === 'AUTO') {
-        return translate.instant('General.auto');
+      if (value === "MANUAL") {
+        return translate.instant("General.manually");
+      } else if (value === "OFF") {
+        return translate.instant("General.off");
+      } else if (value === "AUTO") {
+        return translate.instant("General.auto");
       } else {
-        return '-';
+        return "-";
       }
     };
   };

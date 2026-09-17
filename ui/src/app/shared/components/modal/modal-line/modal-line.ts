@@ -30,7 +30,7 @@ export class ModalLineComponent extends AbstractModalLine {
     { type: "RANGE", properties: { /* ticks*/ tickMin: number, tickMax: number, tickFormatter?: IonRange["pinFormatter"], unit: "H" | string, step?: number, pinFormatter: IonRange["pinFormatter"], label?: IonRange["label"], snaps?: boolean } } |
     { type: "TEXT", valueConverter?: Converter } |
     /* the properties for range slider*/
-    { type: 'DATE_PICKER', properties?: { label: string } };
+    { type: "DATE_PICKER", properties?: { label: string } };
 
   /** Fixed indentation of the modal-line */
   @Input() protected textIndent: TextIndentation = TextIndentation.NONE;

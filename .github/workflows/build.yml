@@ -28,6 +28,14 @@ jobs:
       - name: Build all Java packages
         run: ./gradlew build --console=plain --warn
 
+      - name: Upload Java test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-test-results
+          path: '**/TEST-*.xml'
+          if-no-files-found: ignore
+
       - name: Resolve OpenEMS bundles
         run: ./gradlew resolve --console=plain --warn
 
@@ -65,15 +73,23 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: ${{ runner.os }}-node-
 
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci --prefer-offline --cache ~/.npm
+
       - name: Build OpenEMS UI
-        run: |
-          cd ui
-          npm ci --prefer-offline --cache ~/.npm
-          node_modules/.bin/ng config cli.cache.path "~/.ng"
-          node_modules/.bin/ng build -c "openems,openems-edge-prod,prod"
-          node_modules/.bin/ng lint
-          export CHROME_BIN=/usr/bin/google-chrome-stable
-          npm run test -- --code-coverage --no-watch --no-progress --browsers=ChromeHeadlessCI
+        working-directory: ui
+        run: node_modules/.bin/ng build -c "openems,openems-edge-prod,prod"
+
+      - name: Lint OpenEMS UI
+        working-directory: ui
+        run: npm run lint
+
+      - name: Test OpenEMS UI
+        working-directory: ui
+        env:
+          CHROME_BIN: /usr/bin/google-chrome-stable
+        run: npm run test -- --code-coverage --no-watch --no-progress --browsers=ChromeHeadlessCI
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5

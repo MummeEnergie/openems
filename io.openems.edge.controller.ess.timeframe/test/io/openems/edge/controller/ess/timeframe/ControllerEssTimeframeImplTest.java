@@ -7,7 +7,7 @@ import org.junit.Test;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.common.test.DummyConfigurationAdmin;
 import io.openems.edge.controller.test.ControllerTest;
-import io.openems.edge.ess.power.api.Phase;
+import io.openems.edge.common.type.Phase.SingleOrAllPhase;
 import io.openems.edge.ess.power.api.Relationship;
 import io.openems.edge.ess.test.DummyManagedAsymmetricEss;
 
@@ -39,7 +39,7 @@ public class ControllerEssTimeframeImplTest {
                         .setStartTime("2021-01-01T00:00:00Z") //
                         .setEndTime("2021-01-01T01:00:00Z") //
                         .setTargetSoC(50) //
-                        .setPhase(Phase.ALL) //
+                        .setPhase(SingleOrAllPhase.ALL) //
                         .setRelationship(Relationship.EQUALS) //
                         .build()); //
     }
@@ -56,7 +56,7 @@ public class ControllerEssTimeframeImplTest {
                         .setStartTime("2021-01-01T00:00:00Z") //
                         .setEndTime("2021-01-01T01:00:00Z") //
                         .setTargetSoC(50) //
-                        .setPhase(Phase.ALL) //
+                        .setPhase(SingleOrAllPhase.ALL) //
                         .setRelationship(Relationship.EQUALS) //
                         .build()); //
     }
