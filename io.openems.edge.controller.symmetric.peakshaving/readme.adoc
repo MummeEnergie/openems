@@ -1,5 +1,53 @@
 = Symmetric Peak-Shaving
 
+Factory-ID: `Controller.Symmetric.PeakShaving`.
 Applies peak-shaving at the grid using a symmetric energy storage system.
+
+== Modes
+
+`limitOnly = false` (default) preserves the existing active regulation: discharge
+above `peakShavingPower`, recharge below `rechargePower`, and target zero between
+the thresholds. The active-power target uses the ESS PID filter; reactive power
+is fixed to zero. Outside the configured SoC window the controller does nothing.
+
+`limitOnly = true` reserves a permissible active-power range for subsequent
+controllers, including external REST setpoints. Each cycle it sets:
+
+----
+P_base = measured grid power + measured ESS power
+P_ess >= P_base - peakShavingPower
+----
+
+All powers are in W. Positive ESS power means discharging; negative means charging.
+The lower bound is also applied below the grid limit and can be negative: it limits
+additional battery charging without preventing admissible charging. `rechargePower`
+is ignored in this mode (supply e.g. `0` when creating the component). There is no
+active-power equality, no PID filtering of the bound and no reactive-power setting.
+The grid limit is instantaneous, not a quarter-hour average or an economic schedule.
+
+At or below `socInfimum`, this mode additionally prohibits discharging (`P_ess <= 0`);
+at or above `socSupremum`, it prohibits charging (`P_ess >= 0`). The opposite direction
+remains available, subject to the grid limit. Configure `0 <= socInfimum < socSupremum <= 100`.
+Hardware limits and earlier protection controllers have priority; these SoC bounds
+are additional operating limits, not a replacement for BMS/ESS protection.
+
+`LimitUnfulfillable` warns after five consecutive cycles in which the required
+minimum discharge exceeds the remaining maximum power. The constraint is clipped
+by the existing power API to the feasible maximum. The warning clears when feasible.
+This indicates insufficient available power, not a guarantee about actual device
+response, meter latency, ramp limits or subsequent physical grid peaks.
+
+In island mode this controller sets no constraints. With unknown grid mode or
+missing grid power, ESS power or SoC, `InputUnavailable` is set and this controller
+sets no constraints for that cycle. No previous bound is retained and no zero
+measurement is substituted. Other controllers and hardware protection continue;
+there is no assured grid limiting during telemetry failure. Defined but stale
+measurements are not detected here. Monitor the warning and device communication
+states and validate the site's telemetry-failure strategy before commissioning.
+
+== External service and local fallback
+
+See link:../docs/peakshaving-rest-integration.md[configuration and commissioning guide]
+for scheduler order, separate REST workers, fallback and outstanding site details.
 
 https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.symmetric.peakshaving[Source Code icon:github[]]
