@@ -31,6 +31,7 @@
 	io.openems.backend.application;startlevel=16,\
 
 -runrequires: \
+	bnd.identity;id='io.openems.wrapper.okhttp',\
 	bnd.identity;id='org.ops4j.pax.logging.pax-logging-api',\
 	bnd.identity;id='org.ops4j.pax.logging.pax-logging-log4j2',\
 	bnd.identity;id='org.osgi.service.jdbc',\
@@ -144,4 +145,5 @@
 	org.owasp.encoder;version='[1.3.1,1.3.2)',\
 	org.postgresql.jdbc;version='[42.7.7,42.7.8)',\
 	reactive-streams;version='[1.0.4,1.0.5)',\
-	stax2-api;version='[4.2.2,4.2.3)'
+	stax2-api;version='[4.2.2,4.2.3)',\
+	io.openems.wrapper.okhttp;version=snapshot

@@ -24,6 +24,12 @@ Für die UI über HTTPS ist ein WebSocket-Proxy mit TLS und einer `wss://`-URL n
 
 Alle folgenden Befehle werden im Repository-Verzeichnis ausgeführt:
 
+Falls die GHCR-Pakete privat sind, zuerst `docker login ghcr.io -u <GitHub-Name>`
+ausführen. Als Passwort dient ein Personal Access Token (classic) mit
+`read:packages` und Zugriff auf die Pakete. Für eine Installation ohne Anmeldung
+muss ein Paketadministrator beide Pakete in GitHub unter „Package settings →
+Change visibility“ einmalig auf „Public“ stellen.
+
 ```bash
 docker compose --env-file docker/.env -f docker/docker-compose.yml pull
 docker compose --env-file docker/.env -f docker/docker-compose.yml up -d

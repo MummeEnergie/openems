@@ -61,6 +61,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push Docker images
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -70,3 +71,20 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: ${{ matrix.args }}
+
+      - name: Verify published image tags and platforms
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          while IFS= read -r tag; do
+            [[ -n "$tag" ]] || continue
+            docker buildx imagetools inspect "$tag" --format '{{json .Manifest}}' |
+              jq -e --arg digest "$IMAGE_DIGEST" '
+                .digest == $digest and
+                ([.manifests[].platform | select(.os == "linux") | .architecture] | sort == ["amd64", "arm64"])
+              '
+            echo "Verified $tag at $IMAGE_DIGEST (linux/amd64, linux/arm64)"
+          done <<< "$IMAGE_TAGS"

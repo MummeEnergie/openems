@@ -39,11 +39,8 @@ jobs:
       - name: Resolve OpenEMS bundles
         run: ./gradlew resolve --console=plain --warn
 
-      - name: Validate BackendApp.bndrun
-        run: git diff --exit-code io.openems.backend.application/BackendApp.bndrun
-
-      - name: Validate EdgeApp.bndrun
-        run: git diff --exit-code io.openems.edge.application/EdgeApp.bndrun
+      - name: Validate OSGi resolution
+        run: git diff --exit-code -- io.openems.backend.application/BackendApp.bndrun io.openems.edge.application/EdgeApp.bndrun
 
       - name: Generate JaCoCo Code-coverage-report
         run: ./gradlew jacocoTestReport jacocoAggregatedReport
