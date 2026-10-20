@@ -59,6 +59,8 @@ jobs:
           tags: |
             type=raw,value=${{ steps.openems_version.outputs.version }}-${{ github.run_number }},enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Testabbild eines Branches, nur per workflow_dispatch: nie latest
+            type=sha,prefix=test-,enable=${{ github.ref != 'refs/heads/main' }}
 
       - name: Build and push Docker images
         id: build
@@ -67,13 +69,13 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64, linux/arm64
-          push: ${{ github.ref == 'refs/heads/main' }}
+          push: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: ${{ matrix.args }}
 
       - name: Verify published image tags and platforms
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
