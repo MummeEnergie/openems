@@ -85,6 +85,7 @@
 	bnd.identity;id='io.openems.edge.controller.ess.limittotaldischarge',\
 	bnd.identity;id='io.openems.edge.controller.ess.linearpowerband',\
 	bnd.identity;id='io.openems.edge.controller.ess.mindischargeperiod',\
+	bnd.identity;id='io.openems.edge.controller.ess.peakshavingreserve',\
 	bnd.identity;id='io.openems.edge.controller.ess.reactivepowervoltagecharacteristic',\
 	bnd.identity;id='io.openems.edge.controller.ess.selltogridlimit',\
 	bnd.identity;id='io.openems.edge.controller.ess.standby',\
@@ -277,6 +278,7 @@
 	io.openems.edge.controller.ess.limittotaldischarge;version=snapshot,\
 	io.openems.edge.controller.ess.linearpowerband;version=snapshot,\
 	io.openems.edge.controller.ess.mindischargeperiod;version=snapshot,\
+	io.openems.edge.controller.ess.peakshavingreserve;version=snapshot,\
 	io.openems.edge.controller.ess.reactivepowervoltagecharacteristic;version=snapshot,\
 	io.openems.edge.controller.ess.selltogridlimit;version=snapshot,\
 	io.openems.edge.controller.ess.standby;version=snapshot,\
