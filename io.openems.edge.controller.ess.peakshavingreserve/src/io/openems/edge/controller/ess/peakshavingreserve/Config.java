@@ -30,5 +30,14 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "Reserve SoC [%]", description = "At or below this SoC, the battery is discharged only as far as needed to keep grid purchase at the peak-shaving power. Charging stays allowed.")
 	int reserveSoc() default 20;
 
+	@AttributeDefinition(name = "PID P", description = "Proportional gain of the own PID filter used for shaving within the reserve.")
+	double p() default 0.3;
+
+	@AttributeDefinition(name = "PID I", description = "Integral gain of the own PID filter used for shaving within the reserve.")
+	double i() default 0.3;
+
+	@AttributeDefinition(name = "PID D", description = "Derivative gain of the own PID filter used for shaving within the reserve.")
+	double d() default 0.1;
+
 	String webconsole_configurationFactory_nameHint() default "Controller ESS Peak-Shaving with Reserve [{id}]";
 }

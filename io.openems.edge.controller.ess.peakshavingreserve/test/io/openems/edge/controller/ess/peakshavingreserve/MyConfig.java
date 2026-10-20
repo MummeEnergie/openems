@@ -11,6 +11,9 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private String meterId;
 		private int peakShavingPower;
 		private int reserveSoc = 20;
+		private double p = 0.3;
+		private double i = 0.3;
+		private double d = 0.1;
 
 		private Builder() {
 		}
@@ -79,6 +82,21 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int reserveSoc() {
 		return this.builder.reserveSoc;
+	}
+
+	@Override
+	public double p() {
+		return this.builder.p;
+	}
+
+	@Override
+	public double i() {
+		return this.builder.i;
+	}
+
+	@Override
+	public double d() {
+		return this.builder.d;
 	}
 
 }

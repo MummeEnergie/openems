@@ -15,6 +15,7 @@ import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.filter.PidFilter;
 import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
@@ -32,9 +33,11 @@ import io.openems.edge.meter.api.ElectricityMeter;
  * without a peak the operating point is left to subsequent controllers (e.g.
  * balancing).
  * <li>SoC at or below the reserve, excess &gt; 0: {@code P_ess = excess} through
- * the power PID filter, like Controller.Symmetric.PeakShaving in standard mode.
- * Filtered, because an unfiltered bound oscillates with delayed ESS
- * measurements (observed with Edge2Edge: grid swinging +-100 kW).
+ * an own PID filter. Filtered, because an unfiltered bound oscillates with
+ * delayed ESS measurements (observed with Edge2Edge: grid swinging +-100 kW).
+ * Own filter, because the solver's shared filter is applied again by
+ * subsequent controllers such as balancing within the same cycle, which
+ * clamps its error sum and stalls the control below the target.
  * <li>SoC at or below the reserve, no peak: {@code excess <= P_ess <= 0}.
  * Discharging is prohibited, charging stays allowed up to the peak-shaving
  * power - unlike the standard controller, which holds the battery at 0.
@@ -58,6 +61,8 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 	private ComponentManager componentManager;
 
 	private Config config;
+	private PidFilter pidFilter;
+	private boolean shaving = false;
 
 	public ControllerEssPeakShavingReserveImpl() {
 		super(//
@@ -74,6 +79,8 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 		}
 		super.activate(context, config.id(), config.alias(), config.enabled());
 		this.config = config;
+		this.pidFilter = new PidFilter(config.p(), config.i(), config.d());
+		this.shaving = false;
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE).setNextValue(false);
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.RESERVE_ACTIVE).setNextValue(false);
 	}
@@ -111,15 +118,25 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 				reserveActive = true;
 				if (minimumPower > 0) {
 					// Peak in reserve: discharge exactly the excess, filtered
-					var maximumPower = ess.getPower().getMaxPower(ess, ALL, ACTIVE);
+					var power = ess.getPower();
+					var lowest = power.getMinPower(ess, ALL, ACTIVE);
+					var maximumPower = power.getMaxPower(ess, ALL, ACTIVE);
 					limitUnfulfillable = minimumPower > maximumPower;
-					ess.setActivePowerEqualsWithPid(clip(Math.min(minimumPower, maximumPower)));
+					if (!this.shaving) {
+						this.pidFilter.reset();
+						this.shaving = true;
+					}
+					this.pidFilter.setLimits(lowest, Math.max(lowest, maximumPower));
+					var target = clip(Math.min(minimumPower, maximumPower));
+					var output = this.pidFilter.applyPidFilter(ess.getActivePower().getOrError(), target);
+					ess.setActivePowerEquals(output);
 					return;
 				}
 				// No peak in reserve: no discharging, charging allowed
 				ess.setActivePowerLessOrEquals(0);
 			}
 
+			this.shaving = false;
 			var maximumPower = ess.getPower().getMaxPower(ess, ALL, ACTIVE);
 			limitUnfulfillable = minimumPower > maximumPower;
 			// Clip explicitly to avoid repeating the power API's adjustment log each cycle.
