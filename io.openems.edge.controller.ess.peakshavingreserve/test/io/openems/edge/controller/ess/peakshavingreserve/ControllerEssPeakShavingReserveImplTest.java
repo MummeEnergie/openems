@@ -262,7 +262,13 @@ public class ControllerEssPeakShavingReserveImplTest {
 					.activate(config.build());
 		}
 
-		/** Run the controller, then a subsequent controller asking for externalPower. */
+		/**
+		 * Run the controller, then a subsequent controller asking for a setpoint.
+		 *
+		 * @param externalPower setpoint requested by the subsequent controller [W]
+		 * @return the active power applied by the solver [W]
+		 * @throws Exception on error
+		 */
 		private int cycle(int externalPower) throws Exception {
 			this.controller.run();
 			this.ess.setActivePowerEquals(externalPower);
@@ -286,7 +292,13 @@ public class ControllerEssPeakShavingReserveImplTest {
 		 * arrives {@code delay} cycles later - as with an ESS behind Edge2Edge. The
 		 * grid meter always shows the actual value.
 		 *
-		 * @return actual grid power per cycle
+		 * @param load          site load without battery [W]
+		 * @param soc           state of charge [%]
+		 * @param cycles        number of cycles
+		 * @param delay         measurement delay of the ESS in cycles
+		 * @param withBalancing run balancing as subsequent controller
+		 * @return actual grid power per cycle [W]
+		 * @throws Exception on error
 		 */
 		private int[] simulate(int load, int soc, int cycles, int delay, boolean withBalancing) throws Exception {
 			var balancing = withBalancing ? this.createBalancing() : null;
