@@ -41,6 +41,14 @@ import io.openems.edge.meter.api.ElectricityMeter;
  * <li>SoC at or below the reserve, no peak: {@code excess <= P_ess <= 0}.
  * Discharging is prohibited, charging stays allowed up to the peak-shaving
  * power - unlike the standard controller, which holds the battery at 0.
+ * <li>With {@code rechargeEnabled}: once the SoC has reached the reserve, the
+ * reserve is actively recharged from the grid while there is no peak, up to
+ * {@code reserveTargetSoc} (hysteresis). Charging power is
+ * {@code min(rechargePower, peakShavingPower - rechargeMargin - base)},
+ * through the same own PID filter; without headroom there is no charging. The
+ * SoC band between reserve and target counts as reserve while recharging, so
+ * subsequent controllers cannot discharge what was just recharged. A peak
+ * interrupts recharging and is shaved as above.
  * </ul>
  *
  * <p>
@@ -62,7 +70,13 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 
 	private Config config;
 	private PidFilter pidFilter;
-	private boolean shaving = false;
+	private Mode mode = Mode.NONE;
+	private boolean recharging = false;
+
+	/** Which equality the own PID filter currently tracks. */
+	private enum Mode {
+		NONE, SHAVE, RECHARGE
+	}
 
 	public ControllerEssPeakShavingReserveImpl() {
 		super(//
@@ -77,12 +91,21 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 		if (config.reserveSoc() < 0 || config.reserveSoc() > 100) {
 			throw new IllegalArgumentException("Reserve SoC must be within 0..100, got " + config.reserveSoc());
 		}
+		if (config.reserveTargetSoc() < config.reserveSoc() || config.reserveTargetSoc() > 100) {
+			throw new IllegalArgumentException("Recharge target SoC must be within " + config.reserveSoc()
+					+ "..100, got " + config.reserveTargetSoc());
+		}
+		if (config.rechargePower() < 0 || config.rechargeMargin() < 0) {
+			throw new IllegalArgumentException("Recharge power and margin must not be negative");
+		}
 		super.activate(context, config.id(), config.alias(), config.enabled());
 		this.config = config;
 		this.pidFilter = new PidFilter(config.p(), config.i(), config.d());
-		this.shaving = false;
+		this.mode = Mode.NONE;
+		this.recharging = false;
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE).setNextValue(false);
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.RESERVE_ACTIVE).setNextValue(false);
+		this.channel(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE).setNextValue(false);
 	}
 
 	@Override
@@ -97,6 +120,7 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 		var inputUnavailable = true;
 		var limitUnfulfillable = false;
 		var reserveActive = false;
+		var rechargeActive = false;
 		try {
 			if (ess.getGridMode() == GridMode.OFF_GRID) {
 				inputUnavailable = false;
@@ -114,7 +138,17 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 
 			final var minimumPower = basePower - this.config.peakShavingPower();
 
-			if (soc <= this.config.reserveSoc()) {
+			// Recharge hysteresis: start at the reserve, stop at the target
+			if (!this.config.rechargeEnabled()) {
+				this.recharging = false;
+			} else if (soc <= this.config.reserveSoc()) {
+				this.recharging = true;
+			} else if (soc >= this.config.reserveTargetSoc()) {
+				this.recharging = false;
+			}
+
+			if (soc <= this.config.reserveSoc() || this.recharging) {
+				// Reserve rules apply: at or below the reserve, or recharging up to the target
 				reserveActive = true;
 				if (minimumPower > 0) {
 					// Peak in reserve: discharge exactly the excess, filtered
@@ -122,21 +156,33 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 					var lowest = power.getMinPower(ess, ALL, ACTIVE);
 					var maximumPower = power.getMaxPower(ess, ALL, ACTIVE);
 					limitUnfulfillable = minimumPower > maximumPower;
-					if (!this.shaving) {
-						this.pidFilter.reset();
-						this.shaving = true;
-					}
+					this.switchMode(Mode.SHAVE);
 					this.pidFilter.setLimits(lowest, Math.max(lowest, maximumPower));
 					var target = clip(Math.min(minimumPower, maximumPower));
 					var output = this.pidFilter.applyPidFilter(ess.getActivePower().getOrError(), target);
 					ess.setActivePowerEquals(output);
 					return;
 				}
-				// No peak in reserve: no discharging, charging allowed
+				if (this.recharging) {
+					// Recharge below the peak-shaving power minus margin, at most rechargePower
+					final long target = Math.max(minimumPower + this.config.rechargeMargin(),
+							-(long) this.config.rechargePower());
+					if (target < 0) {
+						var lowest = Math.min(0, ess.getPower().getMinPower(ess, ALL, ACTIVE));
+						this.switchMode(Mode.RECHARGE);
+						this.pidFilter.setLimits(lowest, 0);
+						var output = this.pidFilter.applyPidFilter(ess.getActivePower().getOrError(),
+								clip(Math.max(target, lowest)));
+						ess.setActivePowerEquals(output);
+						rechargeActive = true;
+						return;
+					}
+				}
+				// No peak in reserve: no discharging, charging allowed (lower bound below)
 				ess.setActivePowerLessOrEquals(0);
 			}
 
-			this.shaving = false;
+			this.switchMode(Mode.NONE);
 			var maximumPower = ess.getPower().getMaxPower(ess, ALL, ACTIVE);
 			limitUnfulfillable = minimumPower > maximumPower;
 			// Clip explicitly to avoid repeating the power API's adjustment log each cycle.
@@ -147,6 +193,14 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE)
 					.setNextValue(limitUnfulfillable);
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.RESERVE_ACTIVE).setNextValue(reserveActive);
+			this.channel(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE).setNextValue(rechargeActive);
+		}
+	}
+
+	private void switchMode(Mode next) {
+		if (this.mode != next) {
+			this.pidFilter.reset();
+			this.mode = next;
 		}
 	}
 

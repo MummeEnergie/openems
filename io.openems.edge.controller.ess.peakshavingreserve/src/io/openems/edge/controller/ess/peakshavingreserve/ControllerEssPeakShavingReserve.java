@@ -15,7 +15,9 @@ public interface ControllerEssPeakShavingReserve extends Controller, OpenemsComp
 				.debounce(4, Debounce.TRUE_VALUES_IN_A_ROW_TO_SET_TRUE) // Four suppressed updates; warn on the fifth.
 				.text("Grid limit requires more ESS power than permitted by preceding constraints")), //
 		RESERVE_ACTIVE(Doc.of(Level.INFO) //
-				.text("SoC at or below reserve: discharging only to shave peaks"));
+				.text("SoC at or below reserve: discharging only to shave peaks")), //
+		RECHARGE_ACTIVE(Doc.of(Level.INFO) //
+				.text("Recharging the reserve from the grid below the peak-shaving power"));
 
 		private final Doc doc;
 
