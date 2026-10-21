@@ -145,6 +145,100 @@ public class ControllerEssPeakShavingReserveImplTest {
 		assertEquals(0, f.solve());
 	}
 
+	// -------------------------------------------------------------- recharge
+
+	@Test
+	public void rechargeDisabledByDefaultKeepsBatteryIdleInReserve() throws Exception {
+		var f = new Fixture();
+		f.ess.withSoc(15);
+		assertEquals(0, f.cycle(0));
+		assertFalse(f.state(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE));
+	}
+
+	@Test
+	public void rechargeSettlesAtGridLimitMinusMargin() throws Exception {
+		// 200 kW load: headroom to 360 kW is 160 kW, below the 200 kW cap
+		for (var delay = 0; delay <= 3; delay++) {
+			var grid = new Fixture(recharge()).simulate(200_000, 15, 80, delay, false);
+			assertSettled("delay " + delay, grid, 360_000, 10_000);
+		}
+	}
+
+	@Test
+	public void rechargeIsCappedByRechargePower() throws Exception {
+		// 100 kW load: headroom 260 kW, capped at 200 kW
+		var grid = new Fixture(recharge()).simulate(100_000, 15, 80, 1, false);
+		assertSettled("cap", grid, 300_000, 10_000);
+	}
+
+	@Test
+	public void rechargeHoldsAgainstBalancing() throws Exception {
+		// Balancing wants grid 0 and would discharge; the recharge equality runs first
+		var grid = new Fixture(recharge()).simulate(200_000, 15, 80, 1, true);
+		assertSettled("with balancing", grid, 360_000, 10_000);
+	}
+
+	@Test
+	public void noRechargeWithoutHeadroom() throws Exception {
+		var f = new Fixture(recharge());
+		f.ess.withSoc(15);
+		f.meter.withActivePower(370_000);
+		assertEquals(0, f.cycle(100_000));
+		assertFalse(f.state(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE));
+	}
+
+	@Test
+	public void rechargeHysteresisUpToTarget() throws Exception {
+		var f = new Fixture(recharge());
+		f.ess.withSoc(20);
+		f.controller.run();
+		assertTrue("starts at the reserve", f.solve() < 0);
+		assertTrue(f.state(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE));
+		f.ess.withSoc(21);
+		f.controller.run();
+		assertTrue("continues between reserve and target", f.solve() < 0);
+		f.ess.withSoc(22);
+		assertEquals("released at the target", 100_000, f.cycle(100_000));
+		assertFalse(f.state(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE));
+		// Not restarted above the reserve
+		f.ess.withSoc(21);
+		assertEquals(100_000, f.cycle(100_000));
+	}
+
+	@Test
+	public void peakInterruptsRechargeAndIsShaved() throws Exception {
+		var f = new Fixture(recharge());
+		f.ess.withSoc(15);
+		f.controller.run();
+		assertTrue(f.solve() < 0);
+		f.meter.withActivePower(500_000);
+		f.controller.run();
+		assertTrue("Peak must be shaved while recharging", f.solve() > 0);
+		assertFalse(f.state(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE));
+	}
+
+	@Test
+	public void rejectsInvalidRechargeSettings() throws Exception {
+		for (var c : new MyConfig.Builder[] { config().setRecharge(true, 19, 200_000, 20_000),
+				config().setRecharge(true, 101, 200_000, 20_000), config().setRecharge(true, 22, -1, 20_000),
+				config().setRecharge(true, 22, 200_000, -1) }) {
+			try {
+				new Fixture(c);
+				fail("Invalid recharge settings must be rejected");
+			} catch (RuntimeException e) {
+				Throwable cause = e;
+				while (cause.getCause() != null) {
+					cause = cause.getCause();
+				}
+				assertTrue(cause instanceof IllegalArgumentException);
+			}
+		}
+	}
+
+	private static MyConfig.Builder recharge() {
+		return config().setRecharge(true, 22, 200_000, 20_000);
+	}
+
 	// ------------------------------------------------------ limits and inputs
 
 	@Test

@@ -30,6 +30,18 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "Reserve SoC [%]", description = "At or below this SoC, the battery is discharged only as far as needed to keep grid purchase at the peak-shaving power. Charging stays allowed.")
 	int reserveSoc() default 20;
 
+	@AttributeDefinition(name = "Recharge reserve?", description = "Below the reserve SoC and without a peak, actively charge from the grid until the target SoC is reached. Grid purchase stays at least the recharge margin below the peak-shaving power.")
+	boolean rechargeEnabled() default false;
+
+	@AttributeDefinition(name = "Recharge target SoC [%]", description = "Recharging started at or below the reserve SoC continues up to this SoC (hysteresis). Must not be below the reserve SoC.")
+	int reserveTargetSoc() default 22;
+
+	@AttributeDefinition(name = "Max. recharge power [W]", description = "Upper limit of the charging power while recharging the reserve.")
+	int rechargePower() default 200000;
+
+	@AttributeDefinition(name = "Recharge margin [W]", description = "While recharging, grid purchase is kept this far below the peak-shaving power.")
+	int rechargeMargin() default 20000;
+
 	@AttributeDefinition(name = "PID P", description = "Proportional gain of the own PID filter used for shaving within the reserve.")
 	double p() default 0.3;
 
