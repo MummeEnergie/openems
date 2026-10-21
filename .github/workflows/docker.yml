@@ -19,7 +19,7 @@ jobs:
           - image: ui-edge
             dockerfile: tools/docker/ui/Dockerfile
             args: |
-              VERSION=openems,openems-edge-docker
+              VERSION=openems,openems-edge-docker,prod
     permissions:
       packages: write
       contents: read
