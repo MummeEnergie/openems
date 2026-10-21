@@ -19,4 +19,9 @@ if [[ "$UI_WEBSOCKET" == *"<hostname>"* ]]; then
     sleep infinity
 fi
 
-exec /usr/sbin/nginx
+# notification-fd 3 verlangt eine Bereitschaftsmeldung. nginx schreibt sie
+# nicht selbst; ohne s6-notifyoncheck bleibt der s6-Start unvollstaendig und
+# docker stop endet erst mit SIGKILL (Exit 137, am RevPi am 20.10.2026).
+exec \
+    s6-notifyoncheck -d -n 300 -w 1000 -c "nc -z 127.0.0.1 80" \
+        /usr/sbin/nginx
