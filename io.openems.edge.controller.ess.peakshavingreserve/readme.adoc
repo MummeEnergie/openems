@@ -1,0 +1,21 @@
+= ESS Peak-Shaving with Reserve
+
+Limits grid purchase to a fixed peak-shaving power and keeps a SoC reserve that may only be used for that purpose.
+
+Every cycle, with `base = grid meter + ESS active power` (purchase without the battery) and `excess = base - peakShavingPower`:
+
+* SoC above `reserveSoc`: `P_ess >= excess`, an inequality only. Without a peak, subsequent controllers (e.g. `Controller.Symmetric.Balancing`) determine the operating point.
+* SoC at or below `reserveSoc` with a peak: `P_ess = excess` through an own PID filter (`p`, `i`, `d`, defaults 0.3 / 0.3 / 0.1). Filtered, because an unfiltered bound oscillates with delayed ESS measurements (observed with `Edge2Edge.Ess`: grid swinging by +-100 kW). Own filter, because the solver's shared filter is applied again by subsequent controllers such as balancing in the same cycle, which stalls the control below the target.
+* SoC at or below `reserveSoc` without a peak: `excess <= P_ess <= 0`. No discharging; charging stays allowed up to the peak-shaving power, unlike the standard controller, which holds the battery at 0.
+
+No reactive-power target. Schedule this controller before all other controllers acting on the same ESS.
+
+Independent of `Controller.Symmetric.PeakShaving`. Switching back means disabling this component and enabling the standard controller.
+
+Channels:
+
+* `InputUnavailable`: missing measurement or undefined grid mode; no constraints are set.
+* `LimitUnfulfillable`: the peak needs more discharge than preceding constraints or the ESS allow (debounced, five cycles).
+* `ReserveActive`: SoC at or below the reserve.
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.ess.peakshavingreserve[Source Code icon:github[]]
