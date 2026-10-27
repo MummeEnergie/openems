@@ -2,8 +2,10 @@ package io.openems.edge.controller.api.websocket;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -26,12 +28,20 @@ import io.openems.edge.common.user.User;
 
 public class WsData extends io.openems.common.websocket.WsData {
 
-	private static class SubscribedChannels {
+	static class SubscribedChannels {
 
 		private final Logger log = LoggerFactory.getLogger(SubscribedChannels.class);
 
 		private int lastRequestCount = Integer.MIN_VALUE;
 		private final SortedSet<ChannelAddress> subscribedChannels = new TreeSet<>();
+
+		/**
+		 * Subscribed Channels that could not be read. Each is logged once per
+		 * subscription instead of on every cycle: a UI widget that subscribes a
+		 * Channel the Component does not have (e.g. 'Plug' on an EVCS without it)
+		 * otherwise floods the log with one line per Channel and second.
+		 */
+		private final Set<ChannelAddress> unreadableChannels = new HashSet<>();
 
 		/**
 		 * Applies a SubscribeChannelsRequest.
@@ -44,6 +54,7 @@ public class WsData extends io.openems.common.websocket.WsData {
 			if (this.lastRequestCount < request.getCount()) {
 				this.lastRequestCount = request.getCount();
 				this.subscribedChannels.clear();
+				this.unreadableChannels.clear();
 				for (var channel : request.getChannels()) {
 					this.subscribedChannels.add(ChannelAddress.fromString(channel));
 				}
@@ -62,8 +73,12 @@ public class WsData extends io.openems.common.websocket.WsData {
 				try {
 					Channel<?> c = componentManager.getChannel(channel);
 					value = c.value().asJson();
+					this.unreadableChannels.remove(channel);
 				} catch (IllegalArgumentException | OpenemsNamedException e) {
-					this.log.warn("Unable to read value for Channel [" + channel + "]");
+					if (this.unreadableChannels.add(channel)) {
+						this.log.warn("Unable to read value for Channel [" + channel
+								+ "]. Not logged again for this subscription.");
+					}
 					value = JsonNull.INSTANCE;
 				}
 				result.put(channel.toString(), value);
@@ -71,8 +86,13 @@ public class WsData extends io.openems.common.websocket.WsData {
 			return result;
 		}
 
+		synchronized Set<ChannelAddress> getUnreadableChannels() {
+			return Set.copyOf(this.unreadableChannels);
+		}
+
 		protected synchronized void dispose() {
 			this.subscribedChannels.clear();
+			this.unreadableChannels.clear();
 		}
 	}
 
