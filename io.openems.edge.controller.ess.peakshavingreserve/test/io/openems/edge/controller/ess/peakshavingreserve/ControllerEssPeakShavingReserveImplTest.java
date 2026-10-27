@@ -85,6 +85,43 @@ public class ControllerEssPeakShavingReserveImplTest {
 		assertSettled("load step", grid, 380_000, 10_000);
 	}
 
+	@Test
+	public void chargingCapReactsWithinAFewCycles() throws Exception {
+		// 27.10.2026, 13:25: an external setpoint charges 500 kW with PV, net load
+		// -115 kW; then the net load rises by 65 kW. With the measured battery
+		// power the grid stayed above the limit for 20 s. With the applied
+		// setpoint the cap follows within a few cycles.
+		for (var delay = 1; delay <= 4; delay++) {
+			var f = new Fixture();
+			f.simulate(-115_000, 60, 40, delay, -500_000);
+			var grid = f.simulate(-50_000, 60, 40, delay, -500_000);
+			var above = 0;
+			for (var g : grid) {
+				if (g > 390_000) {
+					above++;
+				}
+			}
+			assertTrue("delay " + delay + ": " + above + " cycles above 390 kW", above <= 5);
+			assertSettled("delay " + delay, grid, 380_000, 10_000);
+		}
+	}
+
+	@Test
+	public void measurementCountsWhenTheBatteryDoesNotFollowTheSetpoint() throws Exception {
+		// The solver applied 300 kW charging for many cycles, but the battery stays
+		// at 0 (e.g. full). The bound must use the measurement, otherwise a peak of
+		// 500 kW would look like 200 kW and not be shaved.
+		var f = new Fixture();
+		f.meter.withActivePower(500_000);
+		f.ess.withActivePower(0);
+		var applied = 0;
+		for (var cycle = 0; cycle < 10; cycle++) {
+			TestUtils.withValue(f.ess.getDebugSetActivePowerChannel(), -300_000);
+			applied = f.cycle(0);
+		}
+		assertEquals(120_000, applied);
+	}
+
 	// --------------------------------------------------------------- reserve
 
 	@Test
@@ -365,6 +402,8 @@ public class ControllerEssPeakShavingReserveImplTest {
 		private final DummyElectricityMeter meter = new DummyElectricityMeter("meter0").withActivePower(200_000);
 		private final ControllerEssPeakShavingReserveImpl controller = new ControllerEssPeakShavingReserveImpl();
 		private final ComponentTest powerTest;
+		/** Last applied setpoints of the previous simulation, to continue from. */
+		private int[] tail = null;
 
 		private Fixture() throws Exception {
 			this(config());
@@ -445,12 +484,17 @@ public class ControllerEssPeakShavingReserveImplTest {
 			var balancing = withBalancing ? this.createBalancing() : null;
 			this.ess.withSoc(soc);
 			var applied = new int[cycles + delay + 1];
+			if (this.tail != null && this.tail.length == delay + 1) {
+				System.arraycopy(this.tail, 0, applied, 0, delay + 1);
+			}
 			var grid = new int[cycles];
 			for (var k = 0; k < cycles; k++) {
 				var actual = applied[k + delay];
 				var measured = applied[k];
 				this.ess.withActivePower(measured);
 				this.meter.withActivePower(load - actual);
+				// The solver's setpoint of the previous cycle becomes visible
+				this.ess.getDebugSetActivePowerChannel().nextProcessImage();
 				this.controller.run();
 				if (balancing != null) {
 					balancing.run();
@@ -461,6 +505,8 @@ public class ControllerEssPeakShavingReserveImplTest {
 				applied[k + delay + 1] = this.solve();
 				grid[k] = load - applied[k + delay + 1];
 			}
+			this.tail = new int[delay + 1];
+			System.arraycopy(applied, cycles, this.tail, 0, delay + 1);
 			return grid;
 		}
 

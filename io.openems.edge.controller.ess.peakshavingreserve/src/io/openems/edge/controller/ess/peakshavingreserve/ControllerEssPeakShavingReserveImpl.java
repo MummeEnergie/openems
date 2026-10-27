@@ -3,6 +3,9 @@ package io.openems.edge.controller.ess.peakshavingreserve;
 import static io.openems.edge.common.type.Phase.SingleOrAllPhase.ALL;
 import static io.openems.edge.ess.power.api.Pwr.ACTIVE;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -31,12 +34,16 @@ import io.openems.edge.meter.api.ElectricityMeter;
  * <ul>
  * <li>SoC above the reserve: {@code P_ess >= excess}. An inequality only;
  * without a peak the operating point is left to subsequent controllers (e.g.
- * balancing). The bound uses a smoothed base (first-order filter,
- * {@link #BASE_FILTER_ALPHA}): as soon as a subsequent controller asks for less
- * discharging than the bound, the battery follows the bound directly, and with
- * the delayed ESS measurement an unfiltered bound oscillates the same way as
- * described for the reserve below (27.10.2026, bound 170 kW against an external
- * charging setpoint: grid swinging between +335 and -191 kW).
+ * balancing). As soon as a subsequent controller asks for less discharging
+ * (or more charging) than the bound, the battery follows the bound directly.
+ * With base = meter + measured ESS power and the ESS measurement arriving 2-4 s
+ * after the meter (Edge2Edge), the bound then oscillated (27.10.2026, bound
+ * 170 kW against an external charging setpoint: grid swinging between +335 and
+ * -191 kW). The base for this bound therefore uses the power the solver applied
+ * in the previous cycle instead of the measurement, as long as the measurement
+ * matches one of the recently applied setpoints (otherwise the battery does not
+ * follow, e.g. when full, and the measurement counts), and is smoothed by a
+ * first-order filter ({@link #BASE_FILTER_ALPHA}).
  * <li>SoC at or below the reserve, excess &gt; 0: {@code P_ess = excess} through
  * an own PID filter. Filtered, because an unfiltered bound oscillates with
  * delayed ESS measurements (observed with Edge2Edge: grid swinging +-100 kW).
@@ -74,12 +81,22 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 	private ComponentManager componentManager;
 
 	/**
-	 * Smoothing of the base for the bound above the reserve, per cycle. Stable in
-	 * simulation for actuator delays of 1-3 and measurement delays of 2-4 cycles
-	 * (measured on the RevPi: 1-2 s and 2-4 s); a 200 kW load step then exceeds
-	 * the peak-shaving power by about 0.3-0.4 kWh.
+	 * Smoothing of the base for the bound above the reserve, per cycle. With the
+	 * applied setpoint as battery power, stable in simulation for actuator delays
+	 * of 1-3 cycles (measured on the RevPi: 1-2 s); after a 65 kW load step the
+	 * grid exceeds the peak-shaving power for about 3 cycles. With the measured
+	 * battery power and alpha 0.25 (first version) it were 11-17 cycles: on
+	 * 27.10.2026 at 13:25 the grid stayed above 380 kW for 20 s, up to 407 kW.
 	 */
-	static final double BASE_FILTER_ALPHA = 0.25;
+	static final double BASE_FILTER_ALPHA = 0.5;
+
+	/** Number of applied setpoints the measurement may lag behind. */
+	static final int SETPOINT_HISTORY = 6;
+
+	/** Tolerance between measurement and an applied setpoint [W]. */
+	static final int SETPOINT_MATCH_TOLERANCE = 30_000;
+
+	private final Deque<Integer> appliedSetpoints = new ArrayDeque<>();
 
 	private Config config;
 	private PidFilter pidFilter;
@@ -118,6 +135,7 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 		this.mode = Mode.NONE;
 		this.recharging = false;
 		this.filteredBase = null;
+		this.appliedSetpoints.clear();
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE).setNextValue(false);
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.RESERVE_ACTIVE).setNextValue(false);
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE).setNextValue(false);
@@ -150,8 +168,10 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 			final var soc = ess.getSoc().getOrError();
 			final long basePower = (long) meter.getActivePower().getOrError() + ess.getActivePower().getOrError();
 			inputUnavailable = false;
-			this.filteredBase = this.filteredBase == null ? basePower
-					: this.filteredBase + BASE_FILTER_ALPHA * (basePower - this.filteredBase);
+			final long boundBase = (long) meter.getActivePower().getOrError()
+					+ this.batteryPowerForBound(ess, ess.getActivePower().getOrError());
+			this.filteredBase = this.filteredBase == null ? boundBase
+					: this.filteredBase + BASE_FILTER_ALPHA * (boundBase - this.filteredBase);
 
 			final var minimumPower = basePower - this.config.peakShavingPower();
 
@@ -210,6 +230,7 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 			if (inputUnavailable) {
 				// Start the smoothing afresh instead of from a stale base
 				this.filteredBase = null;
+				this.appliedSetpoints.clear();
 			}
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.INPUT_UNAVAILABLE).setNextValue(inputUnavailable);
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE)
@@ -217,6 +238,33 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.RESERVE_ACTIVE).setNextValue(reserveActive);
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE).setNextValue(rechargeActive);
 		}
+	}
+
+	/**
+	 * Battery power for the base of the bound above the reserve: the power the
+	 * solver applied in the previous cycle, as long as the measurement matches
+	 * one of the recently applied setpoints; otherwise the measurement.
+	 *
+	 * @param ess      the ESS
+	 * @param measured the measured active power [W]
+	 * @return the battery power to use [W]
+	 */
+	private int batteryPowerForBound(ManagedSymmetricEss ess, int measured) {
+		var applied = ess.getDebugSetActivePower();
+		if (!applied.isDefined()) {
+			this.appliedSetpoints.clear();
+			return measured;
+		}
+		this.appliedSetpoints.addFirst(applied.get());
+		while (this.appliedSetpoints.size() > SETPOINT_HISTORY) {
+			this.appliedSetpoints.removeLast();
+		}
+		for (var setpoint : this.appliedSetpoints) {
+			if (Math.abs(setpoint - measured) <= SETPOINT_MATCH_TOLERANCE) {
+				return applied.get();
+			}
+		}
+		return measured;
 	}
 
 	private void switchMode(Mode next) {
