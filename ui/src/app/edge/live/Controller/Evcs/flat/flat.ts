@@ -1,5 +1,6 @@
 // @ts-strict-ignore
 import { Component } from "@angular/core";
+import { EvcsUtils } from "src/app/shared/components/edge/utils/evcs-utils";
 import { AbstractFlatWidget } from "src/app/shared/components/flat/abstract-flat-widget";
 import { ChannelAddress, CurrentData, EdgeConfig, Utils } from "src/app/shared/shared";
 import { DefaultTypes } from "src/app/shared/type/defaulttypes";
@@ -63,7 +64,7 @@ export class FlatComponent extends AbstractFlatWidget {
 
   protected override getChannelAddresses(): ChannelAddress[] {
     const result = [
-      new ChannelAddress(this.component.id, "ChargePower"),
+      new ChannelAddress(this.component.id, this.getPowerChannelId()),
       new ChannelAddress(this.component.id, "Phases"),
       new ChannelAddress(this.component.id, "Plug"),
       new ChannelAddress(this.component.id, "Status"),
@@ -94,7 +95,7 @@ export class FlatComponent extends AbstractFlatWidget {
     this.status = this.getState(this.controller ? currentData.allComponents[this.controller.id + "/_PropertyEnabledCharging"] === 1 : null, currentData.allComponents[this.component.id + "/Status"], currentData.allComponents[this.component.id + "/Plug"]);
 
     // Check if Energy since beginning is allowed
-    if (currentData.allComponents[this.component.id + "/ChargePower"] > 0 || currentData.allComponents[this.component.id + "/Status"] == 2 || currentData.allComponents[this.component.id + "/Status"] == 7) {
+    if (currentData.allComponents[this.component.id + "/" + this.getPowerChannelId()] > 0 || currentData.allComponents[this.component.id + "/Status"] == 2 || currentData.allComponents[this.component.id + "/Status"] == 7) {
       this.isEnergySinceBeginningAllowed = true;
     }
 
@@ -134,7 +135,7 @@ export class FlatComponent extends AbstractFlatWidget {
     // Phases
     this.phases = currentData.allComponents[this.componentId + "/Phases"];
 
-    this.chargeDischargePower = Utils.convertChargeDischargePower(this.translate, currentData.allComponents[this.component.id + "/ChargePower"]);
+    this.chargeDischargePower = Utils.convertChargeDischargePower(this.translate, currentData.allComponents[this.component.id + "/" + this.getPowerChannelId()]);
     this.chargeTarget = Utils.CONVERT_TO_WATT(this.formatNumber(currentData.allComponents[this.component.id + "/SetChargePowerLimit"]));
     this.energySession = Utils.CONVERT_TO_WATT(currentData.allComponents[this.component.id + "/EnergySession"]);
 
@@ -183,6 +184,14 @@ export class FlatComponent extends AbstractFlatWidget {
     }
   }
 
+  /**
+   * Power channel of the EVCS: "ActivePower" for current drivers, "ChargePower"
+   * only for DeprecatedEvcs. Drivers such as Technagon have no "ChargePower", so
+   * neither the power nor the session energy was shown while charging.
+   */
+  private getPowerChannelId(): string {
+    return EvcsUtils.getEvcsPowerChannelId(this.component, this.config, this.edge);
+  }
 }
 
 enum ChargeState {
