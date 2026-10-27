@@ -31,7 +31,12 @@ import io.openems.edge.meter.api.ElectricityMeter;
  * <ul>
  * <li>SoC above the reserve: {@code P_ess >= excess}. An inequality only;
  * without a peak the operating point is left to subsequent controllers (e.g.
- * balancing).
+ * balancing). The bound uses a smoothed base (first-order filter,
+ * {@link #BASE_FILTER_ALPHA}): as soon as a subsequent controller asks for less
+ * discharging than the bound, the battery follows the bound directly, and with
+ * the delayed ESS measurement an unfiltered bound oscillates the same way as
+ * described for the reserve below (27.10.2026, bound 170 kW against an external
+ * charging setpoint: grid swinging between +335 and -191 kW).
  * <li>SoC at or below the reserve, excess &gt; 0: {@code P_ess = excess} through
  * an own PID filter. Filtered, because an unfiltered bound oscillates with
  * delayed ESS measurements (observed with Edge2Edge: grid swinging +-100 kW).
@@ -68,8 +73,17 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 	@Reference
 	private ComponentManager componentManager;
 
+	/**
+	 * Smoothing of the base for the bound above the reserve, per cycle. Stable in
+	 * simulation for actuator delays of 1-3 and measurement delays of 2-4 cycles
+	 * (measured on the RevPi: 1-2 s and 2-4 s); a 200 kW load step then exceeds
+	 * the peak-shaving power by about 0.3-0.4 kWh.
+	 */
+	static final double BASE_FILTER_ALPHA = 0.25;
+
 	private Config config;
 	private PidFilter pidFilter;
+	private Double filteredBase = null;
 	private Mode mode = Mode.NONE;
 	private boolean recharging = false;
 
@@ -103,6 +117,7 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 		this.pidFilter = new PidFilter(config.p(), config.i(), config.d());
 		this.mode = Mode.NONE;
 		this.recharging = false;
+		this.filteredBase = null;
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE).setNextValue(false);
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.RESERVE_ACTIVE).setNextValue(false);
 		this.channel(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE).setNextValue(false);
@@ -135,6 +150,8 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 			final var soc = ess.getSoc().getOrError();
 			final long basePower = (long) meter.getActivePower().getOrError() + ess.getActivePower().getOrError();
 			inputUnavailable = false;
+			this.filteredBase = this.filteredBase == null ? basePower
+					: this.filteredBase + BASE_FILTER_ALPHA * (basePower - this.filteredBase);
 
 			final var minimumPower = basePower - this.config.peakShavingPower();
 
@@ -183,12 +200,17 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 			}
 
 			this.switchMode(Mode.NONE);
+			final var boundPower = Math.round(this.filteredBase) - this.config.peakShavingPower();
 			var maximumPower = ess.getPower().getMaxPower(ess, ALL, ACTIVE);
-			limitUnfulfillable = minimumPower > maximumPower;
+			limitUnfulfillable = boundPower > maximumPower;
 			// Clip explicitly to avoid repeating the power API's adjustment log each cycle.
 			// Negative bounds allow charging up to the peak-shaving power.
-			ess.setActivePowerGreaterOrEquals(clip(Math.min(minimumPower, maximumPower)));
+			ess.setActivePowerGreaterOrEquals(clip(Math.min(boundPower, maximumPower)));
 		} finally {
+			if (inputUnavailable) {
+				// Start the smoothing afresh instead of from a stale base
+				this.filteredBase = null;
+			}
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.INPUT_UNAVAILABLE).setNextValue(inputUnavailable);
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE)
 					.setNextValue(limitUnfulfillable);

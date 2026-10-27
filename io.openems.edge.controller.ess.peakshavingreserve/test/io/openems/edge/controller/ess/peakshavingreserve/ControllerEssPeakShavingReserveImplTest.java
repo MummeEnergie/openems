@@ -64,6 +64,27 @@ public class ControllerEssPeakShavingReserveImplTest {
 		assertEquals(300_000, f.cycle(300_000));
 	}
 
+	@Test
+	public void boundAboveReserveDoesNotOscillateAgainstExternalCharging() throws Exception {
+		// 27.10.2026 on the RevPi: bound 170 kW, 300 kW load, an external setpoint
+		// (bess) asking to charge 100 kW. The bound was binding, and with the delayed
+		// ESS measurement the grid swung between +335 and -191 kW.
+		for (var delay = 0; delay <= 4; delay++) {
+			var grid = new Fixture(config().setPeakShavingPower(170_000)) //
+					.simulate(300_000, 60, 120, delay, -100_000);
+			assertSettled("delay " + delay, grid, 170_000, 10_000);
+		}
+	}
+
+	@Test
+	public void boundAboveReserveFollowsALoadStep() throws Exception {
+		// Battery held at 0 by an external setpoint, load steps from 300 to 500 kW
+		var f = new Fixture();
+		f.simulate(300_000, 60, 20, 2, 0);
+		var grid = f.simulate(500_000, 60, 60, 2, 0);
+		assertSettled("load step", grid, 380_000, 10_000);
+	}
+
 	// --------------------------------------------------------------- reserve
 
 	@Test
@@ -250,8 +271,13 @@ public class ControllerEssPeakShavingReserveImplTest {
 			assertEquals(20_000, f.cycle(0));
 			assertEquals(cycle == 5, f.state(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE));
 		}
+		// The smoothed bound decays within a few cycles after the peak
 		f.meter.withActivePower(200_000);
-		assertEquals(-100_000, f.cycle(-100_000));
+		var applied = 0;
+		for (var cycle = 0; cycle < 40; cycle++) {
+			applied = f.cycle(-100_000);
+		}
+		assertEquals(-100_000, applied);
 		assertFalse(f.state(ControllerEssPeakShavingReserve.ChannelId.LIMIT_UNFULFILLABLE));
 	}
 
@@ -395,6 +421,27 @@ public class ControllerEssPeakShavingReserveImplTest {
 		 * @throws Exception on error
 		 */
 		private int[] simulate(int load, int soc, int cycles, int delay, boolean withBalancing) throws Exception {
+			return this.simulate(load, soc, cycles, delay, withBalancing, null);
+		}
+
+		/**
+		 * Closed loop as {@link #simulate(int, int, int, int, boolean)}, with a
+		 * subsequent controller that asks for a fixed setpoint (e.g. bess via REST).
+		 *
+		 * @param load          site load without battery [W]
+		 * @param soc           state of charge [%]
+		 * @param cycles        number of cycles
+		 * @param delay         measurement delay of the ESS in cycles
+		 * @param externalPower setpoint requested by the subsequent controller [W]
+		 * @return actual grid power per cycle [W]
+		 * @throws Exception on error
+		 */
+		private int[] simulate(int load, int soc, int cycles, int delay, int externalPower) throws Exception {
+			return this.simulate(load, soc, cycles, delay, false, externalPower);
+		}
+
+		private int[] simulate(int load, int soc, int cycles, int delay, boolean withBalancing,
+				Integer externalPower) throws Exception {
 			var balancing = withBalancing ? this.createBalancing() : null;
 			this.ess.withSoc(soc);
 			var applied = new int[cycles + delay + 1];
@@ -407,6 +454,9 @@ public class ControllerEssPeakShavingReserveImplTest {
 				this.controller.run();
 				if (balancing != null) {
 					balancing.run();
+				}
+				if (externalPower != null) {
+					this.ess.setActivePowerEquals(externalPower);
 				}
 				applied[k + delay + 1] = this.solve();
 				grid[k] = load - applied[k + delay + 1];
