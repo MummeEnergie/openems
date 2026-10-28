@@ -74,7 +74,12 @@ public class AbstractEvcsPricingExporterTest {
 		return Boolean.TRUE.equals(this.exporter.getExportFailedChannel().getNextValue().get());
 	}
 
-	/** First attempt plus three retries, then give up on that price. */
+	/**
+	 * First attempt plus three retries, then give up on that price.
+	 *
+	 * @param price the price that keeps failing
+	 * @throws InterruptedException if interrupted while waiting
+	 */
 	private void failPriceCompletely(double price) throws InterruptedException {
 		this.exporter.start(this.pricing, 0);
 		this.pricing._setPrice(price);
