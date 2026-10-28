@@ -36,11 +36,19 @@ public abstract class AbstractEvcsPricingExporter extends AbstractOpenemsCompone
 
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 	private volatile Double lastExportedPrice = null;
+	/**
+	 * Price whose export was given up after {@link #MAX_RETRIES}. The price
+	 * channel is set every cycle while an override is active, so without this the
+	 * same failing price would start a new export right after giving up.
+	 */
+	private volatile Double lastFailedPrice = null;
 	private final AtomicInteger retryCount = new AtomicInteger(0);
 	private final AtomicBoolean exportInProgress = new AtomicBoolean(false);
+	/** Incremented on every config change; retries of older generations drop. */
+	private final AtomicInteger generation = new AtomicInteger(0);
 
 	private EvcsPricing pricing;
-	private boolean enabled;
+	private volatile boolean enabled;
 	private int exportIntervalSeconds;
 	private int retryBackoffSeconds;
 
@@ -71,12 +79,13 @@ public abstract class AbstractEvcsPricingExporter extends AbstractOpenemsCompone
 		this.retryBackoffSeconds = retryBackoffSeconds;
 		this.subscribeToPriceChanges();
 		this.schedulePeriodicExport();
-		this.tryExport();
+		this.tryExport(true);
 	}
 
 	/**
 	 * Called by the concrete subclass from its {@code @Modified} method. Resets
-	 * export state and re-triggers an export with the latest price.
+	 * export state, drops pending retries, and re-triggers an export with the
+	 * latest price.
 	 *
 	 * @param context               OSGi component context
 	 * @param id                    component ID
@@ -88,31 +97,42 @@ public abstract class AbstractEvcsPricingExporter extends AbstractOpenemsCompone
 	protected void modified(ComponentContext context, String id, String alias, boolean enabled,
 			int exportIntervalSeconds, int retryBackoffSeconds) {
 		super.modified(context, id, alias, enabled);
+		this.generation.incrementAndGet();
 		this.enabled = enabled;
 		this.exportIntervalSeconds = exportIntervalSeconds;
 		this.retryBackoffSeconds = retryBackoffSeconds;
 		this.lastExportedPrice = null;
+		this.lastFailedPrice = null;
 		this.exportInProgress.set(false);
 		this.retryCount.set(0);
-		this.tryExport();
+		this.tryExport(true);
 	}
 
 	@Override
 	protected void deactivate() {
+		this.enabled = false;
+		this.generation.incrementAndGet();
 		super.deactivate();
 		ThreadPoolUtils.shutdownAndAwaitTermination(this.executor, 0);
 	}
 
 	private void subscribeToPriceChanges() {
-		this.pricing.getPriceChannel().onSetNextValue(ignore -> this.tryExport());
+		this.pricing.getPriceChannel().onSetNextValue(ignore -> this.tryExport(false));
 	}
 
 	private void schedulePeriodicExport() {
-		this.executor.scheduleAtFixedRate(this::tryExport, this.exportIntervalSeconds, this.exportIntervalSeconds,
-				TimeUnit.SECONDS);
+		this.executor.scheduleAtFixedRate(() -> this.tryExport(true), this.exportIntervalSeconds,
+				this.exportIntervalSeconds, TimeUnit.SECONDS);
 	}
 
-	private void tryExport() {
+	/**
+	 * Starts an export if the price differs from the last exported one.
+	 *
+	 * @param regular true for the periodic export and config changes, which also
+	 *                retry a price whose export was given up; false for price
+	 *                channel updates, which skip such a price
+	 */
+	void tryExport(boolean regular) { // package-private for testing
 		if (!this.enabled) {
 			return;
 		}
@@ -134,7 +154,13 @@ public abstract class AbstractEvcsPricingExporter extends AbstractOpenemsCompone
 			return;
 		}
 
-		this.exportInProgress.set(true);
+		if (!regular && Objects.equals(this.lastFailedPrice, price)) {
+			return;
+		}
+
+		if (!this.exportInProgress.compareAndSet(false, true)) {
+			return;
+		}
 		this.retryCount.set(0);
 		this.doExport(price);
 	}
@@ -158,6 +184,7 @@ public abstract class AbstractEvcsPricingExporter extends AbstractOpenemsCompone
 	protected void onExportSuccess(Double priceEurPerKwh) {
 		this.retryCount.set(0);
 		this.lastExportedPrice = priceEurPerKwh;
+		this.lastFailedPrice = null;
 		this.exportInProgress.set(false);
 		this._setExportFailed(false);
 	}
@@ -165,23 +192,41 @@ public abstract class AbstractEvcsPricingExporter extends AbstractOpenemsCompone
 	/**
 	 * Schedules a retry with linear backoff ({@code attempt * retryBackoffSeconds}).
 	 * After {@link #MAX_RETRIES} attempts the export is abandoned and
-	 * {@link EvcsPricingExporter.ChannelId#EXPORT_FAILED} is set until the next
-	 * regular trigger (periodic or price change).
+	 * {@link EvcsPricingExporter.ChannelId#EXPORT_FAILED} is set. The same price
+	 * is then only retried by the next periodic export or a config change; a
+	 * different price is exported right away.
+	 *
+	 * <p>
+	 * Nothing is retried once the component is disabled or its config changed.
 	 *
 	 * @param priceEurPerKwh the price to retry exporting in €/kWh
 	 */
 	protected void scheduleRetry(Double priceEurPerKwh) {
+		if (!this.enabled) {
+			this.retryCount.set(0);
+			this.exportInProgress.set(false);
+			return;
+		}
 		var attempt = this.retryCount.incrementAndGet();
 		if (attempt > MAX_RETRIES) {
-			this.log.error("Export failed after {} retries, giving up until next trigger", MAX_RETRIES);
+			this.log.error("Export failed after {} retries, giving up until next periodic export or price change",
+					MAX_RETRIES);
 			this.retryCount.set(0);
+			this.lastFailedPrice = priceEurPerKwh;
 			this.exportInProgress.set(false);
 			this._setExportFailed(true);
 			return;
 		}
 		var delaySec = attempt * this.retryBackoffSeconds;
+		var scheduledGeneration = this.generation.get();
 		this.log.warn("Scheduling retry {}/{} in {} seconds", attempt, MAX_RETRIES, delaySec);
-		this.executor.schedule(() -> this.doExport(priceEurPerKwh), delaySec, TimeUnit.SECONDS);
+		this.executor.schedule(() -> {
+			if (!this.enabled || scheduledGeneration != this.generation.get()) {
+				this.log.info("Dropping scheduled retry: component disabled or reconfigured");
+				return;
+			}
+			this.doExport(priceEurPerKwh);
+		}, delaySec, TimeUnit.SECONDS);
 	}
 
 	/**
