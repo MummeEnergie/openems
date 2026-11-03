@@ -12,6 +12,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int peakShavingPower;
 		private int reserveSoc = 20;
 		private boolean rechargeEnabled = false;
+		private int rechargeStartSoc = -1;
 		private int reserveTargetSoc = 22;
 		private int rechargePower = 200_000;
 		private int rechargeMargin = 20_000;
@@ -52,6 +53,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			this.reserveTargetSoc = targetSoc;
 			this.rechargePower = power;
 			this.rechargeMargin = margin;
+			return this;
+		}
+
+		public Builder setRechargeStartSoc(int rechargeStartSoc) {
+			this.rechargeStartSoc = rechargeStartSoc;
 			return this;
 		}
 
@@ -99,6 +105,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public boolean rechargeEnabled() {
 		return this.builder.rechargeEnabled;
+	}
+
+	@Override
+	public int rechargeStartSoc() {
+		return this.builder.rechargeStartSoc;
 	}
 
 	@Override
