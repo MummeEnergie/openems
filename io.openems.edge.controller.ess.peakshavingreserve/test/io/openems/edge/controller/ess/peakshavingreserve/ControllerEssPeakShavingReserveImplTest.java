@@ -293,8 +293,68 @@ public class ControllerEssPeakShavingReserveImplTest {
 		}
 	}
 
+	@Test
+	public void startBelowReserveHoldsTheReserveWithoutRecharging() throws Exception {
+		// 03.11.2026: start = reserve 20 %, target 22 %; balancing discharged every
+		// recharge right away. Start 18 %, target 20 %: the battery stays at 20 %.
+		var f = new Fixture(recharge(18, 20));
+		var balancing = f.createBalancing();
+		for (var soc : new int[] { 20, 19 }) {
+			f.ess.withSoc(soc);
+			f.controller.run();
+			balancing.run();
+			assertEquals("held at " + soc + " %", 0, f.solve());
+			assertTrue(f.state(ControllerEssPeakShavingReserve.ChannelId.RESERVE_ACTIVE));
+			assertFalse(f.state(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE));
+		}
+		f.ess.withSoc(18);
+		f.controller.run();
+		balancing.run();
+		assertTrue("starts at the start SoC", f.solve() < 0);
+		assertTrue(f.state(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE));
+		f.ess.withSoc(19);
+		f.controller.run();
+		balancing.run();
+		assertTrue("continues up to the target", f.solve() < 0);
+		f.ess.withSoc(20);
+		f.controller.run();
+		balancing.run();
+		assertEquals("held at the target", 0, f.solve());
+		assertFalse(f.state(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE));
+	}
+
+	@Test
+	public void startBelowReserveLeavesTheLoadOnTheGrid() throws Exception {
+		// Same load with balancing: before, recharging to 360 kW; now the grid
+		// carries the load and the battery is idle
+		var before = new Fixture(recharge()).simulate(200_000, 20, 80, 1, true);
+		assertSettled("start at the reserve", before, 360_000, 10_000);
+		var after = new Fixture(recharge(18, 20)).simulate(200_000, 20, 80, 1, true);
+		assertSettled("start below the reserve", after, 200_000, 1_000);
+	}
+
+	@Test
+	public void rejectsInvalidRechargeStart() throws Exception {
+		for (var c : new MyConfig.Builder[] { recharge(21, 22), recharge(-2, 22) }) {
+			try {
+				new Fixture(c);
+				fail("Invalid recharge start must be rejected");
+			} catch (RuntimeException e) {
+				Throwable cause = e;
+				while (cause.getCause() != null) {
+					cause = cause.getCause();
+				}
+				assertTrue(cause instanceof IllegalArgumentException);
+			}
+		}
+	}
+
 	private static MyConfig.Builder recharge() {
 		return config().setRecharge(true, 22, 200_000, 20_000);
+	}
+
+	private static MyConfig.Builder recharge(int startSoc, int targetSoc) {
+		return config().setRecharge(true, targetSoc, 200_000, 20_000).setRechargeStartSoc(startSoc);
 	}
 
 	// ------------------------------------------------------ limits and inputs

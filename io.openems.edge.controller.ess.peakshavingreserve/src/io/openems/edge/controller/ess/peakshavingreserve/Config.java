@@ -30,10 +30,13 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "Reserve SoC [%]", description = "At or below this SoC, the battery is discharged only as far as needed to keep grid purchase at the peak-shaving power. Charging stays allowed.")
 	int reserveSoc() default 20;
 
-	@AttributeDefinition(name = "Recharge reserve?", description = "Below the reserve SoC and without a peak, actively charge from the grid until the target SoC is reached. Grid purchase stays at least the recharge margin below the peak-shaving power.")
+	@AttributeDefinition(name = "Recharge reserve?", description = "From the recharge start SoC and without a peak, actively charge from the grid until the target SoC is reached. Grid purchase stays at least the recharge margin below the peak-shaving power.")
 	boolean rechargeEnabled() default false;
 
-	@AttributeDefinition(name = "Recharge target SoC [%]", description = "Recharging started at or below the reserve SoC continues up to this SoC (hysteresis). Must not be below the reserve SoC.")
+	@AttributeDefinition(name = "Recharge start SoC [%]", description = "Recharging starts at or below this SoC. Below the reserve SoC, the battery is held at the reserve without recharging until the SoC drops to this value. Must not be above the reserve SoC; -1 = the reserve SoC.")
+	int rechargeStartSoc() default -1;
+
+	@AttributeDefinition(name = "Recharge target SoC [%]", description = "Recharging continues up to this SoC (hysteresis). Must not be below the reserve SoC.")
 	int reserveTargetSoc() default 22;
 
 	@AttributeDefinition(name = "Max. recharge power [W]", description = "Upper limit of the charging power while recharging the reserve.")

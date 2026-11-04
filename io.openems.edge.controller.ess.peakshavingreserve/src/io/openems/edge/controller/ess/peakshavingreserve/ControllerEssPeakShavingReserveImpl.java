@@ -53,9 +53,14 @@ import io.openems.edge.meter.api.ElectricityMeter;
  * <li>SoC at or below the reserve, no peak: {@code excess <= P_ess <= 0}.
  * Discharging is prohibited, charging stays allowed up to the peak-shaving
  * power - unlike the standard controller, which holds the battery at 0.
- * <li>With {@code rechargeEnabled}: once the SoC has reached the reserve, the
- * reserve is actively recharged from the grid while there is no peak, up to
- * {@code reserveTargetSoc} (hysteresis). Charging power is
+ * <li>With {@code rechargeEnabled}: once the SoC has reached
+ * {@code rechargeStartSoc} (default: the reserve), the reserve is actively
+ * recharged from the grid while there is no peak, up to
+ * {@code reserveTargetSoc} (hysteresis). A start below the reserve keeps the
+ * battery idle at the reserve: with start = reserve and a target above it, the
+ * battery cycled between reserve and target whenever a subsequent controller
+ * discharged it down to the reserve again (03.11.2026, eight cycles of
+ * 20 -> 22 % within 70 minutes, about 12 kWh each). Charging power is
  * {@code min(rechargePower, peakShavingPower - rechargeMargin - base)},
  * through the same own PID filter; without headroom there is no charging. The
  * SoC band between reserve and target counts as reserve while recharging, so
@@ -126,6 +131,10 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 			throw new IllegalArgumentException("Recharge target SoC must be within " + config.reserveSoc()
 					+ "..100, got " + config.reserveTargetSoc());
 		}
+		if (config.rechargeStartSoc() < -1 || config.rechargeStartSoc() > config.reserveSoc()) {
+			throw new IllegalArgumentException("Recharge start SoC must be within 0.." + config.reserveSoc()
+					+ " or -1, got " + config.rechargeStartSoc());
+		}
 		if (config.rechargePower() < 0 || config.rechargeMargin() < 0) {
 			throw new IllegalArgumentException("Recharge power and margin must not be negative");
 		}
@@ -175,10 +184,10 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 
 			final var minimumPower = basePower - this.config.peakShavingPower();
 
-			// Recharge hysteresis: start at the reserve, stop at the target
+			// Recharge hysteresis: start at the start SoC, stop at the target
 			if (!this.config.rechargeEnabled()) {
 				this.recharging = false;
-			} else if (soc <= this.config.reserveSoc()) {
+			} else if (soc <= this.rechargeStartSoc()) {
 				this.recharging = true;
 			} else if (soc >= this.config.reserveTargetSoc()) {
 				this.recharging = false;
@@ -238,6 +247,15 @@ public class ControllerEssPeakShavingReserveImpl extends AbstractOpenemsComponen
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.RESERVE_ACTIVE).setNextValue(reserveActive);
 			this.channel(ControllerEssPeakShavingReserve.ChannelId.RECHARGE_ACTIVE).setNextValue(rechargeActive);
 		}
+	}
+
+	/**
+	 * SoC at or below which recharging starts.
+	 *
+	 * @return the configured start SoC, or the reserve SoC for -1 [%]
+	 */
+	private int rechargeStartSoc() {
+		return this.config.rechargeStartSoc() < 0 ? this.config.reserveSoc() : this.config.rechargeStartSoc();
 	}
 
 	/**
