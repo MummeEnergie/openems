@@ -130,6 +130,24 @@ public class PidFilterTest {
 	}
 
 	/**
+	 * The full limit must be reachable in both directions, also for a target
+	 * beyond the limit (Balancing at 900 kW load). The old error sum cap stalled
+	 * at 509.5 kW.
+	 */
+	@Test
+	public void testIntegralReachesFullLimitBothDirections() {
+		for (var target : new int[] { 736_000, 900_000, -736_000, -900_000 }) {
+			var p = new PidFilter(0.3, 0.3, 0.1);
+			p.setLimits(-736_000, 736_000);
+			var output = 0;
+			for (var cycle = 0; cycle < 60; cycle++) {
+				output = p.applyPidFilter(output, target);
+			}
+			assertEquals("target " + target, Math.max(-736_000, Math.min(736_000, target)), output);
+		}
+	}
+
+	/**
 	 * Same with a discharging target close to the limit and charging direction.
 	 */
 	@Test
