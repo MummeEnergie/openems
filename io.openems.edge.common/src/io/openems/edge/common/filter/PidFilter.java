@@ -155,8 +155,13 @@ public class PidFilter {
 			return value;
 		}
 
-		// apply additional factor to increase limit
-		errorSumLimit *= ERROR_SUM_LIMIT_FACTOR;
+		// The integral part alone must be able to reach the output limit; otherwise
+		// the output stalls at I * errorSumLimit and only the P part closes the gap.
+		// With I = 0.3 and the factor 2 that was 0.6 x limit (441.6 of 736 kW,
+		// 17.11.2026). Keep the factor as anti-windup bound, but never below
+		// limit / I.
+		var integralReach = this.i > 0 ? errorSumLimit / this.i : 0;
+		errorSumLimit = Math.max(errorSumLimit * ERROR_SUM_LIMIT_FACTOR, integralReach);
 
 		// apply limit
 		if (value < errorSumLimit * -1) {

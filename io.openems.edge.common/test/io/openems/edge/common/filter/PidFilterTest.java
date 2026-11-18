@@ -1,6 +1,7 @@
 package io.openems.edge.common.filter;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -67,8 +68,8 @@ public class PidFilterTest {
 	public void testLimits() {
 		var p = new PidFilter(0.3, 0.3, 0);
 		p.setLimits(-10000, 10000);
-		// The fork caps the accumulated error at twice the output limit. With I=0.3,
-		// the integral contribution saturates at 6000, even before the output limit.
+		// The accumulated error is capped at max(2 x limit, limit / I), so the
+		// integral part alone can reach the output limit.
 		this.t(p, 0, 0, 0);
 		this.t(p, 0, 0, 0);
 		this.t(p, 0, 0, 0);
@@ -82,16 +83,16 @@ public class PidFilterTest {
 		this.t(p, 0, 10000, 3000);
 		this.t(p, 0, 10000, 6000);
 		this.t(p, 1896, 10000, 8431);
-		this.t(p, 4490, 10000, 7653);
-		this.t(p, 6981, 10000, 6906);
-		this.t(p, 8889, 10000, 6333);
-		this.t(p, 9591, 10000, 6123);
-		this.t(p, 9850, 10000, 6045);
-		this.t(p, 9945, 10000, 6017);
-		this.t(p, 9980, 10000, 6006);
-		this.t(p, 9993, 10000, 6002);
-		this.t(p, 9997, 10000, 6001);
-		this.t(p, 9999, 10000, 6000);
+		this.t(p, 4490, 10000, 10000);
+		this.t(p, 6981, 10000, 10000);
+		this.t(p, 8889, 10000, 10000);
+		this.t(p, 9591, 10000, 10000);
+		this.t(p, 9850, 10000, 10000);
+		this.t(p, 9945, 10000, 10000);
+		this.t(p, 9980, 10000, 10000);
+		this.t(p, 9993, 10000, 10000);
+		this.t(p, 9997, 10000, 10000);
+		this.t(p, 9999, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
@@ -108,6 +109,58 @@ public class PidFilterTest {
 		this.t(p, 10000, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
 		this.t(p, 10000, 10000, 10000);
+	}
+
+	/**
+	 * Field case 17.11.2026: Balancing asks for 520 kW discharge, limits are the
+	 * 736 kW of the ESS, P/I/D 0.3/0.3/0.1 and the ESS follows the set-point.
+	 * With the error sum capped at 2 x limit the output stalled at about 460 kW
+	 * (I part 441.6 kW plus the P part), the rest came from the grid.
+	 */
+	@Test
+	public void testIntegralReachesTargetAboveSixtyPercentOfLimit() {
+		var p = new PidFilter(0.3, 0.3, 0.1);
+		p.setLimits(-736_000, 736_000);
+		var output = 0;
+		for (var cycle = 0; cycle < 60; cycle++) {
+			output = p.applyPidFilter(output, 520_000);
+			assertTrue("no overshoot in cycle " + cycle + ": " + output, output <= 520_000);
+		}
+		assertEquals(520_000, output);
+	}
+
+	/**
+	 * The full limit must be reachable in both directions, also for a target
+	 * beyond the limit (Balancing at 900 kW load). The old error sum cap stalled
+	 * at 509.5 kW.
+	 */
+	@Test
+	public void testIntegralReachesFullLimitBothDirections() {
+		for (var target : new int[] { 736_000, 900_000, -736_000, -900_000 }) {
+			var p = new PidFilter(0.3, 0.3, 0.1);
+			p.setLimits(-736_000, 736_000);
+			var output = 0;
+			for (var cycle = 0; cycle < 60; cycle++) {
+				output = p.applyPidFilter(output, target);
+			}
+			assertEquals("target " + target, Math.max(-736_000, Math.min(736_000, target)), output);
+		}
+	}
+
+	/**
+	 * Same with a discharging target close to the limit and charging direction.
+	 */
+	@Test
+	public void testIntegralReachesTargetNearLimitBothDirections() {
+		for (var target : new int[] { 700_000, -700_000 }) {
+			var p = new PidFilter(0.3, 0.3, 0.1);
+			p.setLimits(-736_000, 736_000);
+			var output = 0;
+			for (var cycle = 0; cycle < 100; cycle++) {
+				output = p.applyPidFilter(output, target);
+			}
+			assertEquals(target, output);
+		}
 	}
 
 	@Test
